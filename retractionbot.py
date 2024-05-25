@@ -6,14 +6,22 @@ import pywikibot
 from pywikibot import pagegenerators
 import re
 import yaml
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+import mwparserfromhell
+import sys
+import time
 
-from db import load_retracted_identifiers, log_retraction_edit
+from db import load_retracted_identifiers, log_retraction_edit, retrieve_retracted_identifier
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename=os.path.join(directory, 'retractionbot.log'),
                     level=logging.INFO)
+DOI_REGEX = r"\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?![\"&'<>])[a-zA-Z.\/0-9\-])+)\b"
 
 
 def check_bot_killswitches(site):
@@ -48,20 +56,8 @@ def check_bot_killswitches(site):
 def load_bot_settings():
     """Returns the contents of bot_settings.yaml"""
     with open('bot_settings.yml') as bot_settings_file:
-        loaded_yaml = yaml.load(bot_settings_file)
+        loaded_yaml = yaml.load(bot_settings_file, Loader=Loader)
     return loaded_yaml
-
-
-def find_page_cites(page_text, id):
-    """
-    Given some page text and an identifier, finds all <ref> tags containing
-    that identifier. Returns a list.
-    """
-    soup = BeautifulSoup(page_text, 'html.parser')
-    escaped_id = re.escape(id)
-    page_cites = soup.find_all("ref", string=re.compile(escaped_id, re.IGNORECASE))
-    return page_cites
-
 
 def run_bot():
     bot_settings = load_bot_settings()
@@ -75,64 +71,113 @@ def run_bot():
 
         site = pywikibot.Site(language, 'wikipedia')
         bot_can_run = check_bot_killswitches(site)
-        if not bot_can_run:
-            continue
 
         for identifier in retracted_identifiers:
-            original_id = identifier[3].decode("utf-8")
-            retraction_id = identifier[4].decode("utf-8")
-            retracted_template = template_template.format(
-                template_name=lang_items,
-                id_field=template_field_names[identifier[1].decode("utf-8")],
-                id=retraction_id)
+            time.sleep(5)
+            original_id = identifier[0].decode("utf-8")
+
+            logger.info("Starting processing %s", original_id)
 
             page_list = pagegenerators.SearchPageGenerator('"' + original_id + '"',
                                                            namespaces=[0],
                                                            site=site)
 
             for wp_page in page_list:
+                logger.info("Processing %s", wp_page)
                 page_text = wp_page.text
+            
+                # Returns list of Tag objects with each cite.
+                wikitext = mwparserfromhell.parse(page_text)
 
-                page_cites = find_page_cites(page_text, original_id)
+                page_cites = [x for x in wikitext.filter_tags() if re.findall(DOI_REGEX, str(x))]
+
                 num_cites_found = len(page_cites)
+
                 if num_cites_found == 0:
-                    logger.error("Couldn't find the identifier {id} inside "
-                                 "<ref> tags on page {page}.".format(
-                                    id=original_id,
-                                    page=wp_page))
+                    logger.error("Couldn't find any DOIs inside "
+                             "<ref> tags on page {page}.".format(
+                                page=wp_page))
                     continue
 
-                unique_page_cites = {tag.string for tag in page_cites}
-                for page_cite in unique_page_cites:
-                    # Loop through each unique citation, updating the page text
-                    # for each - in case this identifier is cited multiple
-                    # times in a lazy and/or inconsistent way.
-                    cite_str = page_cite
+                for cite in page_cites:
+                    multiple_DOI = False
 
-                    # Is this cite already flagged with a retraction template?
-                    if "{{retracted" in cite_str.lower():
+                    doi = re.findall(pattern=DOI_REGEX, string=str(cite))
+
+                    if len(doi) != 1:
+                        # This normally indicates a malformed reference or something else gone wrong
+                        multiple_DOI = True
+
+                    retracted_data = retrieve_retracted_identifier(doi[0])
+                    if retracted_data is None or len(retracted_data) == 0:
+                        logger.warning("skipping %s, doi doesn't appear to be retracted", doi[0])
+                        continue
+                    record = retracted_data[0]
+                                
+                    # for identifier in retacted_identifiers:
+                    original_doi = record[2].decode("utf-8")
+                    retraction_doi = record[3].decode("utf-8")
+                    original_pubmed = record[4].decode("utf-8")
+                    retraction_pubmed = record[5].decode("utf-8")
+                    entry_type = record[6].decode("utf-8")
+                    url = record[7].decode("utf-8")
+
+                    cite_str = cite.contents
+
+                    # We want to ignore journal=Cochrane Database Syst Rev for now due to issues with processing
+                    if "journal=cochrane database syst rev" in cite_str.lower():
                         continue
 
-                    ref_to_insert = cite_str + " " + retracted_template
+                    templates = cite_str.filter_templates()
 
-                    page_text = page_text.replace(cite_str, ref_to_insert)
+                    if len(templates) == 1 and multiple_DOI is False:
+                        new_code = ""
+                        if entry_type == "Retraction":
+                            logger.info("New Retraction template needed for DOI %s", original_doi)
+                            new_code = mwparserfromhell.nodes.template.Template(name="Retracted")
+                        elif entry_type == "Expression of concern":
+                            logger.info("New EoC template needed for DOI %s", original_doi)
+                            new_code = mwparserfromhell.nodes.template.Template(name="Expression of Concern")
+                        else:
+                            logger.info("No change needed for doi %s", original_doi)
+                            continue
+                        
+                        if retraction_doi != 0:
+                            new_code.add("doi", retraction_doi)
+                        if retraction_pubmed != 0:
+                            new_code.add("pmed", retraction_pubmed)
+                        if url != "":
+                            new_code.add("1", url + " ''Retraction Watch''")
+                        
+                        cite_str.append(new_code)
+                    
+                    else:
+                        # Check the template is the correct type
+                        for t in templates:
+                            logger.info("Checking retracted template settings")
+                            if t.name == "Expression of Concern" and entry_type == "Retraction":
+                                t.name = "Retraction"
+                            if t.name == "Retraction" and entry_type == "Expression of Concern":
+                                t.name = "Expression of Concern"
+
+                page_text = str(wikitext)
 
                 # Only bother trying to make an edit if we changed anything
-                if page_text != wp_page.text:
+                if page_text != wp_page.text and bot_can_run:
                     wp_page.text = page_text
-                    edit_summary = "Flagging a cited source as retracted"
+                    edit_summary = "Flagging sources with doi's marked as retracted."
 
-                    #wp_page.save(edit_summary, minor=False)
+                    wp_page.save(edit_summary, minor=False)
+
                     logger.info("Successfully edited {page_name} with "
                                 "retracted source(s).".format(
                                     page_name=wp_page.title()
                                 ))
+                        
                     log_retraction_edit(datetime.datetime.now(),
                                         language + ".wikipedia.org",
-                                        wp_page,
-                                        original_id,
-                                        retraction_id)
-
+                                        wp_page)
+                    time.sleep(60) # 60s cooldown following edit
 
 if __name__ == '__main__':
     logger.info("Starting bot run at {dt}".format(
