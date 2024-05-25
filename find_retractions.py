@@ -1,6 +1,10 @@
 import requests
-
+import csv
 from db import save_retraction_to_db, retracted_id_exists, get_latest_timestamp
+import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 user_agent = "RetractionBot (https://github.com/Samwalton9/RetractionBot; mailto:Samwalton9@gmail.com)"
 
@@ -9,51 +13,44 @@ def get_crossref_retractions():
     # List of crossref retraction types based on, but stricter than,
     # https://github.com/fathomlabs/crossref-retractions/blob/master/index.js
 
-    retraction_types = [
-        'removal',
-        'retraction',
-        'Retraction',
-        'retration',
-        ]
+    url = 'https://api.labs.crossref.org/data/retractionwatch'
 
-    crossref_api_url = ('https://api.crossref.org/works'
-                        '?filter=update-type:{type},from-pub-date:{date}'
-                        '&select=DOI,update-to,created'
-                        '&rows=1000'
-                        '&offset={offset}')
-
-    latest_date = get_latest_timestamp()
-
-    for retraction_type in retraction_types:
+    # for retraction_type in retraction_types:
+    with requests.Session() as s:
+        r = s.get(url)
+        text = r.content.decode('utf-8', errors="replace")
+        
+        csv_reader = csv.DictReader(text.splitlines(), delimiter=',', quotechar='"')
+        logger.info("Processing downloaded file")
+        
         items_count = 0
-        continue_running = True
+        for item in csv_reader:
+            try:
 
-        while continue_running:
-            response = requests.get(crossref_api_url.format(
-                date=latest_date,
-                type=retraction_type,
-                offset=items_count
-                ),
-                    headers={'User-Agent': user_agent}
-            )
-            json_response = response.json()
+                items_count += 1
 
-            returned_items = json_response['message']['items']
+                timestamp = datetime.datetime.strptime(item["OriginalPaperDate"], "%m/%d/%Y %H:%M")
+                try:
 
-            if len(returned_items) == 0:
-                continue_running = False
-            else:
-                items_count += len(returned_items)
+                    if (item["OriginalPaperDOI"] != 0 and not retracted_id_exists(item["RetractionDOI"])) or \
+                    (item["OriginalPaperPubMedID"] != 0 and not retracted_id_exists(item["RetractionPubMedID"])):
+                        save_retraction_to_db(
+                            timestamp=timestamp,
+                            origin='Crossref', 
+                            original_doi=item["OriginalPaperDOI"],
+                            retraction_doi=item["RetractionDOI"],
+                            original_pmed=item["OriginalPaperPubMedID"],
+                            retraction_pmed=item["RetractionPubMedID"],
+                            retraction_nature=item["RetractionNature"],
+                            url=item["URLS"]
+                        )
+                except Exception as e:
+                    logging.warning("Failed to write record %s to database : %s", item["Record ID"], repr(e))
 
-            for item in returned_items:
-                timestamp = item['created']['date-time']
-                old_doi = item['update-to'][0]['DOI']
-                new_doi = item['DOI']
-
-                if not retracted_id_exists(new_doi):
-                    save_retraction_to_db(timestamp, 'doi', 'Crossref',
-                                          old_doi, new_doi)
-
+            except Exception as e:
+                logging.warning("Error passing Item %s", item)
+                continue
+        logging.info("Wrote %d records to database", items_count)
 
 def get_ncbi_retractions():
     pass

@@ -1,12 +1,13 @@
 import MySQLdb
 import os
+import datetime
 
-db = MySQLdb.connect(host="tools.db.svc.eqiad.wmflabs",
+db = MySQLdb.connect(host="localhost", #"tools.db.svc.eqiad.wmflabs",
                      db='s54021__retractionbot',
                      read_default_file=os.path.expanduser("~/replica.my.cnf"))
 
 
-def save_retraction_to_db(timestamp, type, origin, original_id, retraction_id):
+def save_retraction_to_db(timestamp, origin, original_doi, retraction_doi, original_pmed, retraction_pmed, retraction_nature, url):
     """
     Given a certain type of identifier (e.g. doi, pmid), its origin
     (e.g. crossref, pubmed) and both the new (retraction) id and old
@@ -15,14 +16,30 @@ def save_retraction_to_db(timestamp, type, origin, original_id, retraction_id):
     cur = db.cursor()
     query = """
         INSERT INTO retractions
-        VALUES ('{timestamp}', '{type}', '{origin}', '{original_id}', '{retraction_id}')"""
-    cur.execute(query.format(
-        timestamp=timestamp,
-        type=type,
-        origin=origin,
-        original_id=original_id,
-        retraction_id=retraction_id
-    ))
+        VALUES ('{timestamp}', '{origin}', '{original_doi}', '{retraction_doi}', '{original_pmed}', '{retraction_pmed}', '{retraction_nature}', '{URLs}')"""
+    
+    if timestamp.year < 1971:
+        cur.execute(query.format(
+            timestamp=datetime.datetime.fromtimestamp(60),
+            origin=origin,
+            original_doi=original_doi,
+            retraction_doi=retraction_doi,
+            original_pmed=original_pmed,
+            retraction_pmed=retraction_pmed,
+            retraction_nature=retraction_nature,
+            URLs=url
+        )) 
+    else:
+        cur.execute(query.format(
+            timestamp=timestamp,
+            origin=origin,
+            original_doi=original_doi,
+            retraction_doi=retraction_doi,
+            original_pmed=original_pmed,
+            retraction_pmed=retraction_pmed,
+            retraction_nature=retraction_nature,
+            URLs=url
+        )) 
 
 
 def retracted_id_exists(retraction_id):
@@ -33,7 +50,7 @@ def retracted_id_exists(retraction_id):
     cur = db.cursor()
     query = """
         SELECT COUNT(*) FROM retractions
-        WHERE retraction_id = "{retraction_id}"
+        WHERE original_doi = "{retraction_id}" OR original_pmed = "{retraction_id}"
     """
     cur.execute(query.format(retraction_id=retraction_id))
     count_result = cur.fetchone()
@@ -68,13 +85,21 @@ def get_latest_timestamp():
 def load_retracted_identifiers():
     cur = db.cursor()
     query = """
-        SELECT * FROM retractions
+        SELECT original_doi,original_pmed FROM retractions ORDER BY RAND()
     """
     cur.execute(query)
     return list(cur.fetchall())
 
+def retrieve_retracted_identifier(id):
+    cur = db.cursor()
+    query = """
+        SELECT * FROM retractions WHERE original_doi="{retraction_id}" OR original_pmed="{retraction_id}"
+    """
+    cur.execute(query.format(retraction_id=id))
+    return list(cur.fetchall())
 
-def log_retraction_edit(timestamp, domain, page_title, old_id, new_id):
+
+def log_retraction_edit(timestamp, domain, page_title):
     cur = db.cursor()
     query = """
         INSERT INTO edit_log
@@ -83,7 +108,8 @@ def log_retraction_edit(timestamp, domain, page_title, old_id, new_id):
     cur.execute(query.format(
         timestamp=timestamp,
         domain=domain,
+        
         page_title=page_title,
-        old_id=old_id,
-        new_id=new_id
+        old_id=0,
+        new_id=0
     ))
