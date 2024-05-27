@@ -1,4 +1,4 @@
-import pymysqlimport pymysql
+import pymysql
 import os
 import datetime
 
@@ -99,17 +99,27 @@ def retrieve_retracted_identifier(id):
     return list(cur.fetchall())
 
 
-def log_retraction_edit(timestamp, domain, page_title):
+def log_retraction_edit(timestamp, domain, page_title, orig_doi, orig_pmid):
     cur = db.cursor()
     query = """
         INSERT INTO edit_log
-        VALUES ('{timestamp}', '{domain}', '{page_title}', '{old_id}', '{new_id}')
+        VALUES ('{timestamp}', '{domain}', '{page_title}', '{orig_doi}', '{orig_pmid}', '{new_doi}', '{new_pmid}')
     """
     cur.execute(query.format(
         timestamp=timestamp,
         domain=domain,
         
         page_title=page_title,
-        old_id=0,
-        new_id=0
+        orig_doi=orig_doi,
+        orig_pmid=orig_pmid,
+        new_doi=0,
+        new_pmid=0
     ))
+
+def check_edits(page_title, id):
+    cur = db.cursor()
+    query = """
+        SELECT * FROM edit_log WHERE page_title="{page_title}" AND (original_doi="{retraction_id}" OR original_pmed="{retraction_id}")
+    """
+    cur.execute(query.format(page_title=page_title, retraction_id=id))
+    return list(cur.fetchall())
