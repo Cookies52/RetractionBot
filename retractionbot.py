@@ -142,12 +142,14 @@ def run_bot():
                             logger.info("No change needed for doi %s", original_doi)
                             continue
                         
-                        if retraction_doi != 0:
+                        if retraction_doi != '0':
                             new_code.add("doi", retraction_doi)
-                        if retraction_pubmed != 0:
+                        if retraction_pubmed != '0':
                             new_code.add("pmed", retraction_pubmed)
                         if url != "":
-                            new_code.add("1", url + " ''Retraction Watch''")
+                           for idx, x in enumerate(url.split(";")):
+                              if x != "":
+                                 new_code.add(str(idx+1), x + " ''Retraction Watch''")
                         
                         cite_str.append(new_code)
                     
