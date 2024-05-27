@@ -1,8 +1,8 @@
-import MySQLdb
+import pymysqlimport pymysql
 import os
 import datetime
 
-db = MySQLdb.connect(host="localhost", #"tools.db.svc.eqiad.wmflabs",
+db = pymysql.connect(host="tools.db.svc.eqiad.wmflabs",
                      db='s54021__retractionbot',
                      read_default_file=os.path.expanduser("~/replica.my.cnf"))
 
