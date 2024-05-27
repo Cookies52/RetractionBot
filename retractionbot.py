@@ -1,4 +1,3 @@
-from bs4 import BeautifulSoup
 import datetime
 import logging
 import os
@@ -7,14 +6,13 @@ from pywikibot import pagegenerators
 import re
 import yaml
 try:
-    from yaml import CLoader as Loader, CDumper as Dumper
+    from yaml import CLoader as Loader
 except ImportError:
-    from yaml import Loader, Dumper
+    from yaml import Loader
 import mwparserfromhell
-import sys
 import time
 
-from db import load_retracted_identifiers, log_retraction_edit, retrieve_retracted_identifier
+from db import load_retracted_identifiers, log_retraction_edit, retrieve_retracted_identifier,check_edits
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -65,8 +63,6 @@ def run_bot():
     template_field_names = bot_settings['template_field_names']
     retracted_identifiers = load_retracted_identifiers()
 
-    template_template = '{{{{{template_name} |{id_field}={id}}}}}'
-
     for language, lang_items in bot_languages.items():
 
         site = pywikibot.Site(language, 'wikipedia')
@@ -78,13 +74,16 @@ def run_bot():
 
             logger.info("Starting processing %s", original_id)
 
-            page_list = pagegenerators.SearchPageGenerator('"' + original_id + '"',
-                                                           namespaces=[0],
-                                                           site=site)
+            #page_list = pagegenerators.SearchPageGenerator('"' + original_id + '"',
+            #                                               namespaces=[0],
+            page_list = pagegenerators.PagesFromPageidGenerator(["46949275"],
+            site=site)
 
             for wp_page in page_list:
                 logger.info("Processing %s", wp_page)
                 page_text = wp_page.text
+
+                changes = []
             
                 # Returns list of Tag objects with each cite.
                 wikitext = mwparserfromhell.parse(page_text)
@@ -128,6 +127,11 @@ def run_bot():
                     if "journal=cochrane database syst rev" in cite_str.lower():
                         continue
 
+                    # If we have attempted to fix this DOI before then skip
+                    if len(check_edits(wp_page, original_doi)) != 0:
+                        logger.info("Skipping already completed page %s for DOI %s", wp_page.title(), original_doi)
+                        continue
+
                     templates = cite_str.filter_templates()
 
                     if len(templates) == 1 and multiple_DOI is False:
@@ -142,19 +146,21 @@ def run_bot():
                             logger.info("No change needed for doi %s", original_doi)
                             continue
                         
-                        if retraction_doi != 0:
+                        if retraction_doi != '0':
                             new_code.add("doi", retraction_doi)
-                        if retraction_pubmed != 0:
+                        if retraction_pubmed != '0':
                             new_code.add("pmed", retraction_pubmed)
                         if url != "":
-                            new_code.add("1", url + " ''Retraction Watch''")
+                           for idx, x in enumerate(url.split(";")):
+                              if x != "":
+                                 new_code.add(str(idx+1), x + " ''Retraction Watch''")
                         
+                        changes.append(original_doi)
                         cite_str.append(new_code)
                     
                     else:
                         # Check the template is the correct type
                         for t in templates:
-                            logger.info("Checking retracted template settings")
                             if t.name == "Expression of Concern" and entry_type == "Retraction":
                                 t.name = "Retraction"
                             if t.name == "Retraction" and entry_type == "Expression of Concern":
@@ -165,7 +171,7 @@ def run_bot():
                 # Only bother trying to make an edit if we changed anything
                 if page_text != wp_page.text and bot_can_run:
                     wp_page.text = page_text
-                    edit_summary = "Flagging sources with doi's marked as retracted."
+                    edit_summary = "Flagging sources with dois marked as retracted by RetractionWatch."
 
                     wp_page.save(edit_summary, minor=False)
 
@@ -173,10 +179,12 @@ def run_bot():
                                 "retracted source(s).".format(
                                     page_name=wp_page.title()
                                 ))
-                        
-                    log_retraction_edit(datetime.datetime.now(),
+                    for x in changes:
+                        log_retraction_edit(datetime.datetime.now(),
                                         language + ".wikipedia.org",
-                                        wp_page)
+                                        wp_page,
+                                        x,
+                                        0)
                     time.sleep(60) # 60s cooldown following edit
 
 if __name__ == '__main__':
