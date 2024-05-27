@@ -3,3 +3,4 @@ mysqlclient==2.2.4
 pywikibot==9.1.2
 PyYAML==6.0.1
 requests==2.32.2
+pymysql==1.1.1
