@@ -17,8 +17,8 @@ from db import load_retracted_identifiers, log_retraction_edit, retrieve_retract
 directory = os.path.dirname(os.path.realpath(__file__))
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=os.path.join(directory, 'retractionbot.log'),
-                    level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+                    filename=os.path.join(directory, 'retractionbot.log'),
 DOI_REGEX = r"\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?![\"&'<>])[a-zA-Z.\/0-9\-])+)\b"
 
 
@@ -69,35 +69,39 @@ def run_bot():
         bot_can_run = check_bot_killswitches(site)
 
         for identifier in retracted_identifiers:
-            time.sleep(5)
+            time.sleep(10) # 10s sleep between API calls.
             original_id = identifier[0].decode("utf-8")
 
             logger.info("Starting processing %s", original_id)
 
-            #page_list = pagegenerators.SearchPageGenerator('"' + original_id + '"',
-            #                                               namespaces=[0],
-            page_list = pagegenerators.PagesFromPageidGenerator(["46949275"],
-            site=site)
+            page_list = pagegenerators.SearchPageGenerator('"' + original_id + '"',
+                                                           namespaces=[0],
 
             for wp_page in page_list:
-                logger.info("Processing %s", wp_page)
-                page_text = wp_page.text
+                page_text = ""
+                try:
+                    page_text = wp_page.text
+                except Exception as e:
+                    logger.error(e)
+                    continue
 
                 changes = []
             
                 # Returns list of Tag objects with each cite.
                 wikitext = mwparserfromhell.parse(page_text)
 
+                logger.debug("Processing %s", wp_page)
                 page_cites = [x for x in wikitext.filter_tags() if re.findall(DOI_REGEX, str(x))]
 
                 num_cites_found = len(page_cites)
 
                 if num_cites_found == 0:
-                    logger.error("Couldn't find any DOIs inside "
+                    logger.debug("Couldn't find any DOIs inside "
                              "<ref> tags on page {page}.".format(
                                 page=wp_page))
                     continue
-
+                    
+                logger.info("Page %s has %d dois cited", wp_page, num_cites_found)
                 for cite in page_cites:
                     multiple_DOI = False
 
@@ -109,9 +113,18 @@ def run_bot():
 
                     retracted_data = retrieve_retracted_identifier(doi[0])
                     if retracted_data is None or len(retracted_data) == 0:
-                        logger.warning("skipping %s, doi doesn't appear to be retracted", doi[0])
+                        logger.debug("skipping %s, doi doesn't appear to be retracted", doi[0])
                         continue
-                    record = retracted_data[0]
+                    
+                    # if > 1, try and select which paper is retracted.
+                    if len (retracted_data) > 1:
+                        for x in retracted_data:
+                            if x[6].decode("utf-8"):
+                                record = x
+                                continue
+                    else:
+                        record = retracted_data[0]
+
                                 
                     # for identifier in retacted_identifiers:
                     original_doi = record[2].decode("utf-8")
@@ -129,7 +142,7 @@ def run_bot():
 
                     # If we have attempted to fix this DOI before then skip
                     if len(check_edits(wp_page, original_doi)) != 0:
-                        logger.info("Skipping already completed page %s for DOI %s", wp_page.title(), original_doi)
+                        logger.debug("Skipping already completed page %s for DOI %s", wp_page.title(), original_doi)
                         continue
 
                     templates = cite_str.filter_templates()
@@ -142,14 +155,17 @@ def run_bot():
                         elif entry_type == "Expression of concern":
                             logger.info("New EoC template needed for DOI %s", original_doi)
                             new_code = mwparserfromhell.nodes.template.Template(name="Expression of Concern")
+                        elif entry_type == "Correction":
+                            logger.info("New Erratum template needed for DOI %s", original_doi)
+                            new_code = mwparserfromhell.nodes.template.Template(name="Erratum")
                         else:
-                            logger.info("No change needed for doi %s", original_doi)
+                            logger.debug("No change needed for doi %s", original_doi)
                             continue
                         
                         if retraction_doi != '0':
                             new_code.add("doi", retraction_doi)
                         if retraction_pubmed != '0':
-                            new_code.add("pmed", retraction_pubmed)
+                            new_code.add("pmid", retraction_pubmed)
                         if url != "":
                            for idx, x in enumerate(url.split(";")):
                               if x != "":
