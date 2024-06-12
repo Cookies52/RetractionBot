@@ -39,8 +39,8 @@ def get_crossref_retractions():
                             origin='Crossref', 
                             original_doi=item["OriginalPaperDOI"],
                             retraction_doi=item["RetractionDOI"],
-                            original_pmed=item["OriginalPaperPubMedID"],
-                            retraction_pmed=item["RetractionPubMedID"],
+                            original_pmid=item["OriginalPaperPubMedID"],
+                            retraction_pmid=item["RetractionPubMedID"],
                             retraction_nature=item["RetractionNature"],
                             url=item["URLS"]
                         )

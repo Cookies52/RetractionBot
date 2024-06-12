@@ -19,6 +19,8 @@ directory = os.path.dirname(os.path.realpath(__file__))
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     filename=os.path.join(directory, 'retractionbot.log'),
+                    level=logging.INFO)
+
 DOI_REGEX = r"\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?![\"&'<>])[a-zA-Z.\/0-9\-])+)\b"
 
 
@@ -75,7 +77,7 @@ def run_bot():
             logger.info("Starting processing %s", original_id)
 
             page_list = pagegenerators.SearchPageGenerator('"' + original_id + '"',
-                                                           namespaces=[0],
+                                                           namespaces=[0], site=site)
 
             for wp_page in page_list:
                 page_text = ""
@@ -91,7 +93,7 @@ def run_bot():
                 wikitext = mwparserfromhell.parse(page_text)
 
                 logger.debug("Processing %s", wp_page)
-                page_cites = [x for x in wikitext.filter_tags() if re.findall(DOI_REGEX, str(x))]
+                page_cites = [x for x in wikitext.filter_tags() if x.tag.lower() == "ref" and re.findall(DOI_REGEX, str(x))]
 
                 num_cites_found = len(page_cites)
 
@@ -137,7 +139,7 @@ def run_bot():
                     cite_str = cite.contents
 
                     # We want to ignore journal=Cochrane Database Syst Rev for now due to issues with processing
-                    if "journal=cochrane database syst rev" in cite_str.lower():
+                    if "journal=cochrane" in cite_str.lower():
                         continue
 
                     # If we have attempted to fix this DOI before then skip
@@ -187,8 +189,8 @@ def run_bot():
                 # Only bother trying to make an edit if we changed anything
                 if page_text != wp_page.text and bot_can_run:
                     wp_page.text = page_text
-                    edit_summary = "Flagging sources with dois marked as retracted by RetractionWatch."
-
+                    print(page_text)
+                    edit_summary = "Flagging sources with dois highlighted by RetractionWatch."
                     wp_page.save(edit_summary, minor=False)
 
                     logger.info("Successfully edited {page_name} with "
