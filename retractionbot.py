@@ -108,29 +108,30 @@ def run_bot():
 
                 for i, item in enumerate(raw_templates):
                     new_code = None
-                    if i == len(raw_templates) - 1 or raw_templates[i+1].name.lower() not in ["erratum", "expression of concern", "retracted"]:
-                        if "cochrane" in str(item).lower:
+                    if i == len(raw_templates) - 1 or raw_templates[i+1].name.lower().strip() not in ["erratum", "expression of concern", "retracted"]:
+                        if "cochrane" in str(item).lower():
                             continue
                         # Process new retractions
                         if item.name.lower() in ["doi", "doi-inline"]:
                             logger.debug("Processing doi templates")
                             if item.has("1", ignore_empty=True):
                                 record = retrieve_retracted_identifier(item.get("1").value.strip())
-                                for r in record:
-                                    new_code = process_item(r)
-                                    if new_code is not None:
-                                        changes.append(r.original_doi)
-                                        wikitext.replace(str(item), str(item) + str(new_code))
+                                
+                            for r in record:
+                                new_code = process_item(r)
+                                if new_code is not None:
+                                    changes.append(r.original_doi)
+                                    wikitext.replace(str(item), str(item) + str(new_code))
 
                         if item.name.lower() == "pmid":
                             logger.debug("Processing pmid templates")
                             if item.has("1", ignore_empty=True):
                                 record = retrieve_retracted_identifier(item.get("1").value.strip())
-                                for r in record:
-                                    new_code = process_item(r)                        
-                                    if new_code is not None:
-                                        changes.append(r.original_pubmed)
-                                        wikitext.replace(str(item), str(item) + str(new_code))                    
+                            for r in record:
+                                new_code = process_item(r)
+                                if new_code is not None:
+                                    changes.append(r.original_pubmed)
+                                    wikitext.replace(str(item), str(item) + str(new_code))                    
                     
                         if "cite" in item.name.lower():
                             logger.debug("Processing cite templates")
@@ -146,9 +147,29 @@ def run_bot():
                                     wikitext.replace(str(item), str(item) + str(new_code))
                     else:
                         # Check existing retraction
-                        if item.get("doi", default=None) is not None:
-                            # look up item
-                            pass
+                        if item.has("doi", ignore_empty=True):
+                            record = retrieve_retracted_identifier(item.get("doi").value.strip())
+                        elif item.has("pmid", ignore_empty=True):
+                            record = retrieve_retracted_identifier(item.get("pmid").value.strip())
+                        else:
+                            continue
+                        in_use = None
+
+                        for r in record:
+                            if r.retraction_nature is None or r.retraction_nature == "Reinstatement":
+                                wikitext.replace(str(raw_templates[i+1]), "")
+                                continue
+                            if r.retraction_nature is None or r.retraction_nature == "Retraction" and (in_use is None or in_use.retraction_nature != "Retraction"):
+                                in_use = r
+                            elif r.retraction_nature is None or r.retraction_nature == "Expression of concern" and (in_use is None or in_use.retraction_nature != "Retraction"):
+                                in_use = r
+                            elif r.retraction_nature is None or in_use is None:
+                                in_use = r
+                        new_code = process_item(in_use)
+                        if raw_templates[i+1].has("intentional", ignore_empty=True):
+                            new_code.add("intentional", raw_templates[i+1].get("intentional").value.strip())
+                        if new_code is not None:
+                            wikitext.replace(str(raw_templates[i+1]), str(new_code))
 
                 page_text = str(wikitext)
 
