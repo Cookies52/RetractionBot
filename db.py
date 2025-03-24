@@ -27,7 +27,7 @@ def save_retraction_to_db(timestamp, origin, original_doi, retraction_doi, origi
     query = """
         INSERT INTO retractions
         VALUES ('{timestamp}', '{origin}', '{original_doi}', '{retraction_doi}', '{original_pmid}', '{retraction_pmid}', '{retraction_nature}', '{URLs}')"""
-    
+
     if timestamp.year < 1971:
         cur.execute(query.format(
             timestamp=datetime.datetime.fromtimestamp(60),
@@ -38,7 +38,7 @@ def save_retraction_to_db(timestamp, origin, original_doi, retraction_doi, origi
             retraction_pmid=retraction_pmid,
             retraction_nature=retraction_nature,
             URLs=url
-        )) 
+        ))
     else:
         cur.execute(query.format(
             timestamp=timestamp,
@@ -49,7 +49,13 @@ def save_retraction_to_db(timestamp, origin, original_doi, retraction_doi, origi
             retraction_pmid=retraction_pmid,
             retraction_nature=retraction_nature,
             URLs=url
-        )) 
+        ))
+
+def truncate_db():
+   db.ping(reconnect=True)
+   cur = db.cursor()
+   query = """TRUNCATE table retractions"""
+   cur.execute(query.format())
 
 
 def retracted_id_exists(retraction_id):
@@ -124,7 +130,7 @@ def log_retraction_edit(timestamp, domain, page_title, orig_doi, orig_pmid):
     cur.execute(query.format(
         timestamp=timestamp,
         domain=domain,
-        
+
         page_title=page_title,
         orig_doi=orig_doi,
         orig_pmid=orig_pmid,

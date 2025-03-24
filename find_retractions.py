@@ -1,6 +1,6 @@
 import requests
 import csv
-from db import save_retraction_to_db, retracted_id_exists, get_latest_timestamp
+from db import save_retraction_to_db, retracted_id_exists, get_latest_timestamp, truncate_db
 import datetime
 import logging
 
@@ -19,10 +19,10 @@ def get_crossref_retractions():
     with requests.Session() as s:
         r = s.get(url)
         text = r.content.decode('utf-8', errors="replace")
-        
+
         csv_reader = csv.DictReader(text.splitlines(), delimiter=',', quotechar='"')
         logger.info("Processing downloaded file")
-        
+
         items_count = 0
         for item in csv_reader:
             try:
@@ -36,7 +36,7 @@ def get_crossref_retractions():
                     (item["OriginalPaperPubMedID"] != 0 and not retracted_id_exists(item["RetractionPubMedID"])):
                         save_retraction_to_db(
                             timestamp=timestamp,
-                            origin='Crossref', 
+                            origin='Crossref',
                             original_doi=item["OriginalPaperDOI"],
                             retraction_doi=item["RetractionDOI"],
                             original_pmid=item["OriginalPaperPubMedID"],
@@ -57,4 +57,5 @@ def get_ncbi_retractions():
 
 
 if __name__ == '__main__':
+    truncate_db()
     get_crossref_retractions()
