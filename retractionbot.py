@@ -4,6 +4,7 @@ import os
 import pywikibot
 from pywikibot import pagegenerators
 import re
+import pywikibot.login
 import yaml
 try:
     from yaml import CLoader as Loader
@@ -95,7 +96,7 @@ def run_bot():
                page_list = pagegenerators.SearchPageGenerator(search_string,namespaces=[0], site=site)
             except Exception as e:
                     logger.error(e)
-                    sleep(60*5)
+                    time.sleep(60*5)
                     continue
 
             for wp_page in page_list:
@@ -203,6 +204,8 @@ def run_bot():
                                 wikitext.replace(raw_templates[i+1], str(new_code))
 
                 page_text = str(wikitext)
+
+                print(page_text)
 
                 # Only bother trying to make an edit if we changed anything
                 if page_text != wp_page.text and bot_can_run:

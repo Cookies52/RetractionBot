@@ -4,3 +4,7 @@ user-password.py
 venv
 __pycache__/
 .idea
+apicache/
+logs/
+*.lwp
+throttle.ctrl

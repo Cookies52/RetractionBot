@@ -1,6 +1,11 @@
-retracted_template_names:
-  en: Retracted
+template_name_map:
+  en: 
+    Retracted: Retracted
+    eoc: expression of concern
+    erratum: erratum
 
 template_field_names:
-  doi: doi
-  pmid: pmid
+  en: 
+    doi: doi
+    pmid: pmid
+    intentional: intentional
