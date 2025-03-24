@@ -14,3 +14,6 @@ template_field_names:
     doi: doi
     pmid: pmid
     intentional: intentional
+
+summary_map:
+  en: Flagging sources with dois highlighted by RetractionWatch

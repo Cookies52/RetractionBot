@@ -227,8 +227,7 @@ def run_bot():
                 # Only bother trying to make an edit if we changed anything
                 if page_text != wp_page.text and bot_can_run:
                     wp_page.text = page_text
-                    edit_summary = "Flagging sources with dois highlighted by RetractionWatch."
-                    wp_page.save(edit_summary, minor=False)
+                    wp_page.save(bot_settings[language], minor=False)
 
                     logger.info("Successfully edited {page_name} with "
                                 "retracted source(s).".format(
