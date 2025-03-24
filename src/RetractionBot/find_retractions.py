@@ -1,12 +1,15 @@
+import lxml.etree
+import lxml.html
 import requests
 import csv
-from db import save_retraction_to_db, retracted_id_exists, get_latest_timestamp, truncate_db
+from .db import save_retraction_to_db, retracted_id_exists, get_latest_timestamp, truncate_db
 import datetime
 import logging
+import lxml
 
 logger = logging.getLogger(__name__)
 
-user_agent = "RetractionBot (https://github.com/Samwalton9/RetractionBot; mailto:Samwalton9@gmail.com)"
+user_agent = "RetractionBot (https://github.com/cookies52/RetractionBot; mailto:matthewdann52@gmail.com)"
 
 
 def get_crossref_retractions():
@@ -53,7 +56,16 @@ def get_crossref_retractions():
         logging.info("Wrote %d records to database", items_count)
 
 def get_ncbi_retractions():
-    pass
+    with requests.Session() as s:
+
+        for mode in ["correction"]: #, "retraction", '"expression of concern"']
+            r = s.get(f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pmc&term=${mode}[filter]&usehistory=y&RetMax=100")
+            lxml.etree.parse(r.text)
+
+            
+            # Get details
+
+            # https://www.ncbi.nlm.nih.gov/pmc/oai/oai.cgi?verb=GetRecord&identifier=oai:pubmedcentral.nih.gov:11924858&metadataPrefix=pmc_fm
 
 
 if __name__ == '__main__':

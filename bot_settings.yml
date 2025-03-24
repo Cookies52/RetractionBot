@@ -1,8 +1,13 @@
+db:
+  host: localhost # tools.db.svc.eqiad.wmflabs
+  name: s54021__retractionbot
+
 template_name_map:
   en: 
     Retracted: Retracted
-    eoc: expression of concern
-    erratum: erratum
+    retraction: Retracted
+    eoc: Expression of Concern
+    erratum: Erratum
 
 template_field_names:
   en: 
