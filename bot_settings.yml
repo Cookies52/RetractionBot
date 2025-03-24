@@ -1,6 +1,16 @@
-retracted_template_names:
-  en: Retracted
+db:
+  host: localhost # tools.db.svc.eqiad.wmflabs
+  name: s54021__retractionbot
+
+template_name_map:
+  en: 
+    Retracted: Retracted
+    retraction: Retracted
+    eoc: Expression of Concern
+    erratum: Erratum
 
 template_field_names:
-  doi: doi
-  pmid: pmid
+  en: 
+    doi: doi
+    pmid: pmid
+    intentional: intentional
