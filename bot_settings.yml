@@ -8,12 +8,22 @@ template_name_map:
     retraction: Retracted
     eoc: Expression of Concern
     erratum: Erratum
+  fr:
+    Retracted: Rétracté
+    retraction: Rétracté
+    eoc: Expression de réserves
+    erratum: Erratum
 
 template_field_names:
   en: 
     doi: doi
     pmid: pmid
     intentional: intentional
+  fr: 
+    doi: doi
+    pmid: pmid
+    intentional: intentionnel
 
 summary_map:
   en: Flagging sources with dois highlighted by RetractionWatch
+  fr: Mise en évidence de sources épinglées par [[Retraction Watch]]
