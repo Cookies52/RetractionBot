@@ -291,7 +291,19 @@ def run_bot():
                                     "checked",
                                     raw_templates[i + 1].get("checked").value.strip(),
                                 )
-                            if new_code is not None:
+                            if raw_templates[i + 1].has(
+                                "doi-access", ignore_empty=True
+                            ):
+                                new_code.add(
+                                    "doi-access",
+                                    raw_templates[i + 1]
+                                    .get("doi-access")
+                                    .value.strip(),
+                                )
+                            if (
+                                new_code is not None
+                                and raw_templates[i + 1] != new_code
+                            ):
                                 wikitext.replace(raw_templates[i + 1], str(new_code))
 
                 page_text = str(wikitext)
@@ -299,7 +311,7 @@ def run_bot():
                 # Only bother trying to make an edit if we changed anything
                 if page_text != wp_page.text and bot_can_run:
                     wp_page.text = page_text
-                    wp_page.save(bot_settings[language], minor=False)
+                    wp_page.save(bot_settings["summary_map"][language], minor=False)
 
                     logger.info(
                         "Successfully edited {page_name} with "

@@ -1,26 +1,35 @@
 import lxml.etree
 import lxml.html
 import requests
+import os
 import csv
-from .db import (
-    save_retraction_to_db,
-    retracted_id_exists,
-    truncate_db,
-)
+from .db import Database
 import datetime
 import logging
 import lxml
 
+from .retraction_bot import load_bot_settings
+
+directory = os.path.dirname(os.path.realpath(__file__))
+
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    filename=os.path.join(directory, "findretraction.log"),
+    level=logging.INFO,
+)
+
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.WARNING)
 
 user_agent = "RetractionBot (https://github.com/cookies52/RetractionBot; mailto:matthewdann52@gmail.com)"
 
 
-def get_crossref_retractions():
+def get_crossref_retractions(database: Database):
     # List of crossref retraction types based on, but stricter than,
     # https://github.com/fathomlabs/crossref-retractions/blob/master/index.js
 
-    url = "https://api.labs.crossref.org/data/retractionwatch"
+    url = "https://gitlab.com/crossref/retraction-watch-data/-/raw/main/retraction_watch.csv?ref_type=heads"
 
     # for retraction_type in retraction_types:
     with requests.Session() as s:
@@ -43,12 +52,13 @@ def get_crossref_retractions():
 
                     if (
                         item["OriginalPaperDOI"] != 0
-                        and not retracted_id_exists(item["RetractionDOI"])
+                        and not database.retracted_id_exists(item["RetractionDOI"])
                     ) or (
                         item["OriginalPaperPubMedID"] != 0
-                        and not retracted_id_exists(item["RetractionPubMedID"])
+                        and not database.retracted_id_exists(item["RetractionPubMedID"])
                     ):
-                        save_retraction_to_db(
+                        logger.info("Saving retraction to db")
+                        database.save_retraction_to_db(
                             timestamp=timestamp,
                             origin="Crossref",
                             original_doi=item["OriginalPaperDOI"],
@@ -58,6 +68,8 @@ def get_crossref_retractions():
                             retraction_nature=item["RetractionNature"],
                             url=item["URLS"],
                         )
+                    else:
+                        logger.info("%s already in db", item)
                 except Exception as e:
                     logging.warning(
                         "Failed to write record %s to database : %s",
@@ -65,8 +77,8 @@ def get_crossref_retractions():
                         repr(e),
                     )
 
-            except Exception:
-                logging.warning("Error passing Item %s", item)
+            except Exception as e:
+                logging.exception("Error passing Item %s", item, exc_info=e)
                 continue
         logging.info("Wrote %d records to database", items_count)
 
@@ -86,5 +98,8 @@ def get_ncbi_retractions():
 
 
 if __name__ == "__main__":
-    truncate_db()
-    get_crossref_retractions()
+    bot_settings = load_bot_settings()
+    database = Database(bot_settings["db"])
+    database.truncate_db()
+
+    get_crossref_retractions(database)

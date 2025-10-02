@@ -51,40 +51,42 @@ class Database:
         cur = self._db.cursor()
         query = """
             INSERT INTO retractions
-            VALUES ('{timestamp}', '{origin}', '{original_doi}', '{retraction_doi}', '{original_pmid}', '{retraction_pmid}', '{retraction_nature}', '{URLs}')"""
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
 
         if timestamp.year < 1971:
             cur.execute(
-                query.format(
-                    timestamp=datetime.datetime.fromtimestamp(60),
-                    origin=origin,
-                    original_doi=original_doi,
-                    retraction_doi=retraction_doi,
-                    original_pmid=original_pmid,
-                    retraction_pmid=retraction_pmid,
-                    retraction_nature=retraction_nature,
-                    URLs=url,
-                )
+                query,
+                (
+                    datetime.datetime.fromtimestamp(60),
+                    origin,
+                    original_doi,
+                    retraction_doi,
+                    original_pmid,
+                    retraction_pmid,
+                    retraction_nature,
+                    url,
+                ),
             )
         else:
             cur.execute(
-                query.format(
-                    timestamp=timestamp,
-                    origin=origin,
-                    original_doi=original_doi,
-                    retraction_doi=retraction_doi,
-                    original_pmid=original_pmid,
-                    retraction_pmid=retraction_pmid,
-                    retraction_nature=retraction_nature,
-                    URLs=url,
-                )
+                query,
+                (
+                    timestamp,
+                    origin,
+                    original_doi,
+                    retraction_doi,
+                    original_pmid,
+                    retraction_pmid,
+                    retraction_nature,
+                    url,
+                ),
             )
 
     def truncate_db(self):
         self._db.ping(reconnect=True)
         cur = self._db.cursor()
         query = """TRUNCATE table retractions"""
-        cur.execute(query.format())
+        cur.execute(query, ())
 
     def retracted_id_exists(self, retraction_id):
         """
@@ -94,10 +96,10 @@ class Database:
         cur = self._db.cursor()
         query = """
             SELECT COUNT(*) FROM retractions
-            WHERE original_doi = "{retraction_id}" OR original_pmid = "{retraction_id}"
+            WHERE original_doi = %s OR original_pmid = %s
         """
         self._db.ping(reconnect=True)
-        cur.execute(query.format(retraction_id=retraction_id))
+        cur.execute(query, (retraction_id, retraction_id))
         count_result = cur.fetchone()
 
         if count_result[0] != 0:
@@ -138,10 +140,10 @@ class Database:
     def retrieve_retracted_identifier(self, id):
         cur = self._db.cursor()
         query = """
-            SELECT * FROM retractions WHERE original_doi="{retraction_id}" OR original_pmid="{retraction_id}"
+            SELECT * FROM retractions WHERE original_doi=%s OR original_pmid=%s
         """
         self._db.ping(reconnect=True)
-        cur.execute(query.format(retraction_id=id))
+        cur.execute(query, (id, id))
         item = list(cur.fetchall())
         return [Retraction(x[1], x[2], x[3], x[4], x[5], x[6], x[7]) for x in item]
 
@@ -149,26 +151,27 @@ class Database:
         cur = self._db.cursor()
         query = """
             INSERT INTO edit_log
-            VALUES ('{timestamp}', '{domain}', '{page_title}', '{orig_doi}', '{orig_pmid}', '{new_doi}', '{new_pmid}')
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         self._db.ping(reconnect=True)
         cur.execute(
-            query.format(
-                timestamp=timestamp,
-                domain=domain,
-                page_title=page_title,
-                orig_doi=orig_doi,
-                orig_pmid=orig_pmid,
-                new_doi=0,
-                new_pmid=0,
-            )
+            query,
+            (
+                timestamp,
+                domain,
+                page_title,
+                orig_doi,
+                orig_pmid,
+                0,
+                0,
+            ),
         )
 
     def check_edits(self, page_title, id):
         cur = self._db.cursor()
         query = """
-            SELECT * FROM edit_log WHERE page_title="{page_title}" AND (original_doi="{retraction_id}" OR original_pmid="{retraction_id}")
+            SELECT * FROM edit_log WHERE page_title=%s AND (original_doi=%s OR original_pmid=%s)
         """
         self._db.ping(reconnect=True)
-        cur.execute(query.format(page_title=page_title, retraction_id=id))
+        cur.execute(query, (page_title, id, id))
         return list(cur.fetchall())
