@@ -1,6 +1,6 @@
 mysqlclient==2.2.7
-pywikibot==10.0.0
-PyYAML==6.0.2
-requests==2.32.3
-pymysql==1.1.1
-lxml==5.3.1
+pywikibot==10.5.0
+PyYAML==6.0.3
+requests==2.32.5
+pymysql==1.1.2
+lxml==6.0.2
