@@ -286,6 +286,15 @@ def run_bot():
                                     .get(intentional_field)
                                     .value.strip(),
                                 )
+                            if raw_templates[i + 1].has(
+                                "pmcid", ignore_empty=True
+                            ):
+                                new_code.add(
+                                    "pmcid",
+                                    raw_templates[i + 1]
+                                    .get("pmcid")
+                                    .value.strip(),
+                                )
                             if raw_templates[i + 1].has("checked", ignore_empty=True):
                                 new_code.add(
                                     "checked",
@@ -352,7 +361,7 @@ def process_item(record, template_map, field_map):
         logger.debug("No change needed for doi %s", record.original_doi)
         return None
 
-    if record.retraction_doi != "0":
+    if record.retraction_doi != "0" and record.retraction_doi != "unavaliable":
         new_code.add(field_map.get("doi", "doi"), record.retraction_doi)
     if record.retraction_pubmed != "0":
         new_code.add(field_map.get("pmid", "pmid"), record.retraction_pubmed)
