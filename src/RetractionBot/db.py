@@ -82,11 +82,14 @@ class Database:
                 ),
             )
 
+        self._db.commit()
+
     def truncate_db(self):
         self._db.ping(reconnect=True)
         cur = self._db.cursor()
         query = """TRUNCATE table retractions"""
         cur.execute(query, ())
+        self._db.commit()
 
     def retracted_id_exists(self, retraction_id):
         """
@@ -166,6 +169,7 @@ class Database:
                 0,
             ),
         )
+        self._db.commit()
 
     def check_edits(self, page_title, id):
         cur = self._db.cursor()
