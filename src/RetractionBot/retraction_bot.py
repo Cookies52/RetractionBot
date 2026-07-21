@@ -39,7 +39,7 @@ def check_bot_killswitches(site):
     "yes", don't run. Checks per-wiki.
     Returns True if bot can run, False otherwise.
     """
-    run_page_name = "User:RetractedBotManiaTest/run"
+    run_page_name = "User:RetractionBot/run"
 
     for a_site in [site]:
         run_page = pywikibot.Page(a_site, run_page_name)
