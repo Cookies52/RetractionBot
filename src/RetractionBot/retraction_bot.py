@@ -66,6 +66,7 @@ def run_bot():
     bot_settings = load_bot_settings()
     bot_languages = bot_settings["template_name_map"]
     template_field_names = bot_settings["template_field_names"]
+    citation_templates = bot_settings["citation_templates"]
     database = Database(bot_settings["db"])
     retracted_identifiers = database.load_retracted_identifiers()
 
@@ -200,7 +201,7 @@ def run_bot():
                                         str(item), str(item) + str(new_code)
                                     )
 
-                        if "cite" in item.name.lower():
+                        if item.name.strip() in citation_templates.get(language, []):
                             logger.debug("Processing cite templates")
                             record = []
                             if item.has(doi_field, ignore_empty=True):
