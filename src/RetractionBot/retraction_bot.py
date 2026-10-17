@@ -288,12 +288,12 @@ def run_bot():
                                     .value.strip(),
                                 )
                             if raw_templates[i + 1].has(
-                                "pmcid", ignore_empty=True
+                                "pmc", ignore_empty=True
                             ):
                                 new_code.add(
-                                    "pmcid",
+                                    "pmc",
                                     raw_templates[i + 1]
-                                    .get("pmcid")
+                                    .get("pmc")
                                     .value.strip(),
                                 )
                             if raw_templates[i + 1].has("checked", ignore_empty=True):
@@ -362,9 +362,9 @@ def process_item(record, template_map, field_map):
         logger.debug("No change needed for doi %s", record.original_doi)
         return None
 
-    if record.retraction_doi != "0" and record.retraction_doi != "unavaliable":
+    if record.retraction_doi.strip().lower() not in ("", "0", "unavailable"):
         new_code.add(field_map.get("doi", "doi"), record.retraction_doi)
-    if record.retraction_pubmed != "0":
+    if record.retraction_pubmed.strip() not in ("", "0"):
         new_code.add(field_map.get("pmid", "pmid"), record.retraction_pubmed)
     if record.url != "":
         for idx, x in enumerate(record.url.split(";")):
