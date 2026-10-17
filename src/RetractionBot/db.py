@@ -1,6 +1,14 @@
 import pymysql
 import os
 import datetime
+import string
+
+# DOIs match regardless of case, but only for A-Z (DOI Handbook 2025, section 4.3.4)
+_FOLD = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
+
+
+def fold_doi(doi):
+    return doi.translate(_FOLD)
 
 
 class Retraction:
@@ -47,6 +55,7 @@ class Database:
         (e.g. crossref, pubmed) and both the new (retraction) id and old
         (retracted) id, save this to the DB. type can be 'doi' or 'pmid'
         """
+        original_doi = fold_doi(original_doi)
         self._db.ping(reconnect=True)
         cur = self._db.cursor()
         query = """
@@ -146,7 +155,7 @@ class Database:
             SELECT * FROM retractions WHERE original_doi=%s OR original_pmid=%s
         """
         self._db.ping(reconnect=True)
-        cur.execute(query, (id, id))
+        cur.execute(query, (fold_doi(id), id))
         item = list(cur.fetchall())
         return [Retraction(x[1], x[2], x[3], x[4], x[5], x[6], x[7]) for x in item]
 
