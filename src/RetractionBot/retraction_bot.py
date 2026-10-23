@@ -201,7 +201,12 @@ def run_bot():
                                         str(item), str(item) + str(new_code)
                                     )
 
-                        if item.name.strip() in citation_templates.get(language, []):
+                        # MediaWiki treats underscores as spaces in template names
+                        template_name = item.name.strip().replace("_", " ").casefold()
+                        # citation_templates lists templates without "cite" in the name
+                        if "cite" in template_name or template_name in (
+                            x.casefold() for x in citation_templates.get(language, [])
+                        ):
                             logger.debug("Processing cite templates")
                             record = []
                             if item.has(doi_field, ignore_empty=True):

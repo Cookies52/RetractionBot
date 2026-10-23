@@ -29,25 +29,6 @@ summary_map:
   fr: Signalement automatique d'une publication rétractée selon [[Retraction Watch]]
 
 citation_templates:
-  en:
-    - Cite journal
-    - Cite book
-    - Cite conference
-    - Cite document
-    - Cite encyclopedia
-    - Cite interview
-    - Cite magazine
-    - Cite mailing list
-    - Cite map
-    - Cite news
-    - Cite newsgroup
-    - Cite press release
-    - Cite report
-    - Cite sign
-    - Cite speech
-    - Cite tech report
-    - Cite thesis
-    - Cite web
   fr:
     - Article
     - Ouvrage
