@@ -200,6 +200,7 @@ def run_bot():
                                     wikitext.replace(
                                         str(item), str(item) + str(new_code)
                                     )
+                                    break
 
                         if item.name.strip() in citation_templates.get(language, []):
                             logger.debug("Processing cite templates")
