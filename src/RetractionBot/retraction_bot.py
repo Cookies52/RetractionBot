@@ -14,7 +14,7 @@ except ImportError:
 import mwparserfromhell
 import time
 
-from .db import Database
+from .db import Database, fold_doi
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -275,46 +275,16 @@ def run_bot():
 
                         if in_use is not None:
                             new_code = process_item(in_use, template_map, field_map)
-                            intentional_field = field_map.get(
-                                "intentional", "intentional"
-                            )
-                            if raw_templates[i + 1].has(
-                                intentional_field, ignore_empty=True
-                            ):
-                                new_code.add(
-                                    intentional_field,
-                                    raw_templates[i + 1]
-                                    .get(intentional_field)
-                                    .value.strip(),
+                            # Edit the existing tag in place, so that field
+                            # order and spacing changes don't produce cosmetic
+                            # edits, and fields added by editors are kept.
+                            if new_code is not None:
+                                update_template_in_place(
+                                    raw_templates[i + 1],
+                                    new_code,
+                                    doi_field,
+                                    pmid_field,
                                 )
-                            if raw_templates[i + 1].has(
-                                "pmc", ignore_empty=True
-                            ):
-                                new_code.add(
-                                    "pmc",
-                                    raw_templates[i + 1]
-                                    .get("pmc")
-                                    .value.strip(),
-                                )
-                            if raw_templates[i + 1].has("checked", ignore_empty=True):
-                                new_code.add(
-                                    "checked",
-                                    raw_templates[i + 1].get("checked").value.strip(),
-                                )
-                            if raw_templates[i + 1].has(
-                                "doi-access", ignore_empty=True
-                            ):
-                                new_code.add(
-                                    "doi-access",
-                                    raw_templates[i + 1]
-                                    .get("doi-access")
-                                    .value.strip(),
-                                )
-                            if (
-                                new_code is not None
-                                and raw_templates[i + 1] != new_code
-                            ):
-                                wikitext.replace(raw_templates[i + 1], str(new_code))
 
                 page_text = str(wikitext)
 
@@ -371,6 +341,60 @@ def process_item(record, template_map, field_map):
             if x != "":
                 new_code.add(str(idx + 1), x + " ''Retraction Watch''")
     return new_code
+
+
+def normalize_field_value(name, value, doi_field):
+    """Returns a field value with formatting-only differences removed."""
+    value = " ".join(str(value).split())
+    # Treat http and https links as the same link.
+    value = re.sub(r"\bhttps?://", "http://", value, flags=re.IGNORECASE)
+    if name.lower() == doi_field.lower():
+        value = fold_doi(value)
+    return value
+
+
+def bot_fields(template, doi_field, pmid_field):
+    """
+    Returns a dict of the non-empty fields the bot manages (doi, pmid and the
+    numbered Retraction Watch links) with normalized values.
+    """
+    fields = {}
+    for param in template.params:
+        name = str(param.name).strip()
+        if name in (doi_field, pmid_field) or name.isdigit():
+            if str(param.value).strip():
+                fields[name] = normalize_field_value(name, param.value, doi_field)
+    return fields
+
+
+def normalize_template_name(name):
+    return " ".join(str(name).replace("_", " ").split()).casefold()
+
+
+def update_template_in_place(existing, new, doi_field, pmid_field):
+    """
+    Updates an existing template to match a newly generated one. Only fields
+    the bot manages are added, changed or removed, and only when their value
+    really differs, so field order, spacing and editor-added fields are kept.
+    """
+    if normalize_template_name(existing.name) != normalize_template_name(new.name):
+        old_name = str(existing.name)
+        leading = old_name[: len(old_name) - len(old_name.lstrip())]
+        trailing = old_name[len(old_name.rstrip()) :]
+        existing.name = leading + str(new.name).strip() + trailing
+
+    existing_fields = bot_fields(existing, doi_field, pmid_field)
+    new_fields = bot_fields(new, doi_field, pmid_field)
+
+    for param in new.params:
+        name = str(param.name).strip()
+        if existing_fields.get(name) != new_fields.get(name):
+            existing.add(name, str(param.value).strip())
+
+    for param in list(existing.params):
+        name = str(param.name).strip()
+        if name in existing_fields and name not in new_fields:
+            existing.remove(param)
 
 
 if __name__ == "__main__":
