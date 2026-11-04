@@ -49,27 +49,20 @@ def get_crossref_retractions(database: Database):
                     item["OriginalPaperDate"], "%m/%d/%Y %H:%M"
                 )
                 try:
-
-                    if (
-                        item["OriginalPaperDOI"] != 0
-                        and not database.retracted_id_exists(item["RetractionDOI"])
-                    ) or (
-                        item["OriginalPaperPubMedID"] != 0
-                        and not database.retracted_id_exists(item["RetractionPubMedID"])
-                    ):
-                        logger.info("Saving retraction to db")
-                        database.save_retraction_to_db(
-                            timestamp=timestamp,
-                            origin="Crossref",
-                            original_doi=item["OriginalPaperDOI"],
-                            retraction_doi=item["RetractionDOI"],
-                            original_pmid=item["OriginalPaperPubMedID"],
-                            retraction_pmid=item["RetractionPubMedID"],
-                            retraction_nature=item["RetractionNature"],
-                            url=item["URLS"],
-                        )
-                    else:
-                        logger.info("%s already in db", item)
+                    # The table is emptied before each load, so every row is
+                    # saved. A paper can have several notices (e.g. a
+                    # correction and a retraction), and the bot needs them all.
+                    logger.info("Saving retraction to db")
+                    database.save_retraction_to_db(
+                        timestamp=timestamp,
+                        origin="Crossref",
+                        original_doi=item["OriginalPaperDOI"],
+                        retraction_doi=item["RetractionDOI"],
+                        original_pmid=item["OriginalPaperPubMedID"],
+                        retraction_pmid=item["RetractionPubMedID"],
+                        retraction_nature=item["RetractionNature"],
+                        url=item["URLS"],
+                    )
                 except Exception as e:
                     logging.warning(
                         "Failed to write record %s to database : %s",

@@ -100,25 +100,6 @@ class Database:
         cur.execute(query, ())
         self._db.commit()
 
-    def retracted_id_exists(self, retraction_id):
-        """
-        Given a retraction ID string, checks if an entry already exists for it
-        in the database. If so, return True.
-        """
-        cur = self._db.cursor()
-        query = """
-            SELECT COUNT(*) FROM retractions
-            WHERE original_doi = %s OR original_pmid = %s
-        """
-        self._db.ping(reconnect=True)
-        cur.execute(query, (retraction_id, retraction_id))
-        count_result = cur.fetchone()
-
-        if count_result[0] != 0:
-            return True
-        else:
-            return False
-
     def get_latest_timestamp(self):
         """
         Get the latest timestamp from the database in the format YYYY-MM-DD
@@ -143,7 +124,7 @@ class Database:
     def load_retracted_identifiers(self):
         cur = self._db.cursor()
         query = """
-            SELECT original_doi,original_pmid FROM retractions ORDER BY RAND()
+            SELECT DISTINCT original_doi,original_pmid FROM retractions ORDER BY RAND()
         """
         self._db.ping(reconnect=True)
         cur.execute(query)
