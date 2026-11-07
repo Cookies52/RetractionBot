@@ -3,4 +3,3 @@ pywikibot~=11.8.0
 PyYAML==6.0.3
 requests~=2.34.2
 pymysql~=1.2.3
-lxml~=6.1.3

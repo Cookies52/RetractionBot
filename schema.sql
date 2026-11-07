@@ -6,7 +6,9 @@ CREATE TABLE `retractions` (
   `original_pmid` varbinary(200) NOT NULL,
   `retraction_pmid` varbinary(200) NOT NULL,
   `retraction_nature` varbinary(200) NOT NULL,
-  `url` varbinary(5000) NOT NULL
+  `url` varbinary(5000) NOT NULL,
+  KEY `original_doi` (`original_doi`),
+  KEY `original_pmid` (`original_pmid`)
 ) ENGINE=Aria;
 
 CREATE TABLE `edit_log` (
@@ -18,3 +20,14 @@ CREATE TABLE `edit_log` (
   `original_pmid` varbinary(200) NOT NULL,
   `retraction_pmid` varbinary(200) NOT NULL
 ) ENGINE=Aria;
+
+-- Existing installations: the lookups in db.py filter on these two columns and
+-- scanned the whole table for every citation they inspected. Run once:
+--
+--   ALTER TABLE retractions
+--     ADD KEY `original_doi` (`original_doi`),
+--     ADD KEY `original_pmid` (`original_pmid`);
+--
+-- find_retractions.py reloads the data into `retractions_new` (created with
+-- CREATE TABLE ... LIKE, so it inherits these keys) and swaps it in with an
+-- atomic RENAME TABLE. It also uses `retractions_old` briefly.
