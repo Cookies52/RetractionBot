@@ -3,7 +3,6 @@ import logging
 import os
 import pywikibot
 from pywikibot import pagegenerators
-import re
 import pywikibot.login
 import yaml
 
@@ -11,11 +10,11 @@ try:
     from yaml import CLoader as Loader
 except ImportError:
     from yaml import Loader
-import mwparserfromhell
 import time
 
 from .db import Database
 from .identifiers import is_doi, is_pmid
+from .page_edits import process_page
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -28,7 +27,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(logging.DEBUG)
-DOI_REGEX = r"\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?![\"&'<>])[a-zA-Z.\/0-9\-])+)\b"
 
 
 def check_bot_killswitches(site):
@@ -61,16 +59,6 @@ def load_bot_settings():
     with open("bot_settings.yml") as bot_settings_file:
         loaded_yaml = yaml.load(bot_settings_file, Loader=Loader)
     return loaded_yaml
-
-
-def lookup_named_identifiers(item, doi_field, pmid_field, database):
-    doi = item.get(doi_field).value.strip() if item.has(doi_field) else ""
-    pmid = item.get(pmid_field).value.strip() if item.has(pmid_field) else ""
-    if is_doi(doi):
-        return database.retrieve_retracted_identifier(doi)
-    if is_pmid(pmid):
-        return database.retrieve_retracted_identifier(pmid)
-    return []
 
 
 def run_bot():
@@ -126,189 +114,10 @@ def run_bot():
                     logger.error(e)
                     continue
 
-                changes = []
-
-                # Returns list of Tag objects with each cite.
-                wikitext = mwparserfromhell.parse(page_text)
-
-                logger.debug("Processing %s", wp_page)
-                page_cites = [
-                    x
-                    for x in wikitext.filter_tags()
-                    if x.tag.lower() == "ref" and re.findall(DOI_REGEX, str(x))
-                ]
-
-                num_cites_found = len(page_cites)
-
-                if num_cites_found == 0:
-                    logger.info(
-                        "Couldn't find any DOIs on page {page}.".format(page=wp_page)
-                    )
-                    continue
-                else:
-                    logger.info("Page %s has %d dois cited", wp_page, num_cites_found)
-
-                raw_templates = wikitext.filter_templates()
-
-                doi_field = field_map.get("doi", "doi")
-                pmid_field = field_map.get("pmid", "pmid")
-
-                for i, item in enumerate(raw_templates):
-                    new_code = None
-                    if i == len(raw_templates) - 1 or raw_templates[
-                        i + 1
-                    ].name.casefold().strip() not in (
-                        x.casefold() for x in template_map.values()
-                    ):
-                        if "cochrane" in str(item).lower():
-                            continue
-                        # Process new retractions
-                        if item.name.lower() in [doi_field.lower(), "doi-inline"]:
-                            logger.debug("Processing doi templates")
-                            record = []
-                            if item.has("1", ignore_empty=True):
-                                identifier = item.get("1").value.strip()
-                                if is_doi(identifier):
-                                    record = database.retrieve_retracted_identifier(identifier)
-                            # get list of retractions in record
-                            xitems = [x.retraction_nature for x in record]
-                            for r in record:
-                                if (
-                                    "retraction" in xitems
-                                    and r.retraction_nature == "retraction"
-                                ):
-                                    new_code = process_item(r, template_map, field_map)
-                                if (
-                                    "retracted" in xitems
-                                    and r.retraction_nature == "retraction"
-                                ):
-                                    new_code = process_item(r, template_map, field_map)
-                                if (
-                                    new_code is None
-                                    and "expression of concern" in xitems
-                                    and r.retraction_nature == "expression of concern"
-                                ):
-                                    new_code = process_item(r, template_map, field_map)
-                                elif new_code is None:
-                                    new_code = process_item(r, template_map, field_map)
-
-                                if new_code is not None:
-                                    changes.append(r.original_doi)
-                                    if not wikitext.contains(str(item) + str(new_code)):
-                                        wikitext.replace(
-                                            str(item), str(item) + str(new_code)
-                                        )
-
-                        if item.name.lower() == pmid_field.lower():
-                            logger.debug("Processing pmid templates")
-                            record = []
-                            if item.has("1", ignore_empty=True):
-                                identifier = item.get("1").value.strip()
-                                if is_pmid(identifier):
-                                    record = database.retrieve_retracted_identifier(identifier)
-                            for r in record:
-                                new_code = process_item(r, template_map, field_map)
-                                if new_code is not None:
-                                    changes.append(r.original_pubmed)
-                                    wikitext.replace(
-                                        str(item), str(item) + str(new_code)
-                                    )
-
-                        if item.name.strip() in citation_templates.get(language, []):
-                            logger.debug("Processing cite templates")
-                            record = lookup_named_identifiers(item, doi_field, pmid_field, database)
-
-                            for r in record:
-                                new_code = process_item(r, template_map, field_map)
-                                if (
-                                    new_code is not None
-                                    and r.original_doi not in changes
-                                ):
-                                    changes.append(r.original_doi)
-                                    wikitext.replace(
-                                        str(item), str(item) + str(new_code)
-                                    )
-                    else:
-                        # Check existing retraction
-                        record = lookup_named_identifiers(item, doi_field, pmid_field, database)
-                        in_use = None
-
-                        logger.debug("Existing retracted item: %s", record)
-
-                        for r in record:
-                            if (
-                                r.retraction_nature is None
-                                or r.retraction_nature == "Reinstatement"
-                            ):
-                                wikitext.replace(str(raw_templates[i + 1]), "")
-                                continue
-                            if (
-                                r.retraction_nature is None
-                                or r.retraction_nature == "Retraction"
-                                and (
-                                    in_use is None
-                                    or in_use.retraction_nature != "Retraction"
-                                )
-                            ):
-                                in_use = r
-                            elif (
-                                r.retraction_nature is None
-                                or r.retraction_nature == "Expression of concern"
-                                and (
-                                    in_use is None
-                                    or in_use.retraction_nature != "Retraction"
-                                )
-                            ):
-                                in_use = r
-                            elif r.retraction_nature is None or in_use is None:
-                                in_use = r
-
-                        logger.debug("In Use item: %s", in_use)
-
-                        if in_use is not None:
-                            new_code = process_item(in_use, template_map, field_map)
-                            intentional_field = field_map.get(
-                                "intentional", "intentional"
-                            )
-                            if raw_templates[i + 1].has(
-                                intentional_field, ignore_empty=True
-                            ):
-                                new_code.add(
-                                    intentional_field,
-                                    raw_templates[i + 1]
-                                    .get(intentional_field)
-                                    .value.strip(),
-                                )
-                            if raw_templates[i + 1].has(
-                                "pmc", ignore_empty=True
-                            ):
-                                new_code.add(
-                                    "pmc",
-                                    raw_templates[i + 1]
-                                    .get("pmc")
-                                    .value.strip(),
-                                )
-                            if raw_templates[i + 1].has("checked", ignore_empty=True):
-                                new_code.add(
-                                    "checked",
-                                    raw_templates[i + 1].get("checked").value.strip(),
-                                )
-                            if raw_templates[i + 1].has(
-                                "doi-access", ignore_empty=True
-                            ):
-                                new_code.add(
-                                    "doi-access",
-                                    raw_templates[i + 1]
-                                    .get("doi-access")
-                                    .value.strip(),
-                                )
-                            if (
-                                new_code is not None
-                                and raw_templates[i + 1] != new_code
-                            ):
-                                wikitext.replace(raw_templates[i + 1], str(new_code))
-
-                page_text = str(wikitext)
+                page_text, changes = process_page(
+                    page_text, database.retrieve_retracted_identifier, template_map,
+                    field_map, citation_templates.get(language, ()),
+                )
 
                 # Only bother trying to make an edit if we changed anything
                 if page_text != wp_page.text and bot_can_run:
@@ -319,50 +128,15 @@ def run_bot():
                         "Successfully edited {page_name} with "
                         "retracted source(s).".format(page_name=wp_page.title())
                     )
-                    for x in changes:
+                    for change in changes:
                         database.log_retraction_edit(
                             datetime.datetime.now(),
                             language + ".wikipedia.org",
                             wp_page,
-                            x,
+                            change.record.original_doi,
                             0,
                         )
 
-
-def process_item(record, template_map, field_map):
-    new_code = ""
-    if record.retraction_nature == "Retraction":
-        logger.info(
-            "Generating Retraction template needed for DOI %s", record.original_doi
-        )
-        new_code = mwparserfromhell.nodes.template.Template(
-            name=template_map.get("retracted", "Retracted")
-        )
-    elif record.retraction_nature == "Expression of concern":
-        logger.info("Generating EoC template needed for DOI %s", record.original_doi)
-        new_code = mwparserfromhell.nodes.template.Template(
-            name=template_map.get("expression of concern", "Expression of Concern")
-        )
-    elif record.retraction_nature == "Correction":
-        logger.info(
-            "Generating Erratum template needed for DOI %s", record.original_doi
-        )
-        new_code = mwparserfromhell.nodes.template.Template(
-            name=template_map.get("erratum", "Erratum")
-        )
-    else:
-        logger.debug("No change needed for doi %s", record.original_doi)
-        return None
-
-    if record.retraction_doi.strip().lower() not in ("", "0", "unavailable"):
-        new_code.add(field_map.get("doi", "doi"), record.retraction_doi)
-    if record.retraction_pubmed.strip() not in ("", "0"):
-        new_code.add(field_map.get("pmid", "pmid"), record.retraction_pubmed)
-    if record.url != "":
-        for idx, x in enumerate(record.url.split(";")):
-            if x != "":
-                new_code.add(str(idx + 1), x + " ''Retraction Watch''")
-    return new_code
 
 
 if __name__ == "__main__":
