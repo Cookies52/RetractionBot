@@ -29,29 +29,29 @@ logger.addHandler(logging.StreamHandler())
 logger.setLevel(logging.DEBUG)
 
 
-def check_bot_killswitches(site):
-    """
-    Verifies that bot killswitch hasn't been edited, for this site or Meta.
+class WikiSwitch:
+    """Refresh a wiki's on-wiki switch periodically and before every write."""
 
-    Checks User:RetractionBot/run, an openly editable page, to see if an
-    editor has disabled the bot. If the page contains anything other than
-    "yes", don't run. Checks per-wiki.
-    Returns True if bot can run, False otherwise.
-    """
-    run_page_name = "User:RetractionBot/run"
+    def __init__(self, site):
+        self.site = site
+        self.checked_at = float("-inf")
+        self.allowed = False
 
-    for a_site in [site]:
-        run_page = pywikibot.Page(a_site, run_page_name)
+    def enabled(self, *, fresh=False):
+        now = time.monotonic()
+        if not fresh and now - self.checked_at < 60:
+            return self.allowed
 
-        if run_page.text != "yes":
-            log_text = "{run_page_name} not set to 'yes' on {lang},"
-            "not running.".format()
-            logger.error(log_text)
-            return False
-
-    # If we haven't returned False then everything
-    # seems to be fine, so return True.
-    return True
+        self.checked_at = now
+        page = pywikibot.Page(self.site, "User:RetractionBot/run")
+        try:
+            self.allowed = page.get(force=True).strip() == "yes"
+        except pywikibot.exceptions.Error as error:
+            self.allowed = False
+            logger.warning("Cannot read %s on %s: %s", page.title(), self.site, error)
+        if not self.allowed:
+            logger.warning("Stopping on %s because %s does not authorize edits", self.site, page.title())
+        return self.allowed
 
 
 def load_bot_settings():
@@ -74,10 +74,14 @@ def run_bot():
         field_map = template_field_names[language]
 
         site = pywikibot.Site(language, "wikipedia")
+        switch = WikiSwitch(site)
+        if not switch.enabled():
+            continue
         site.login()
-        bot_can_run = check_bot_killswitches(site)
 
         for identifier in retracted_identifiers:
+            if not switch.enabled():
+                break
             search_string = ""
             original_id = identifier[0].decode("utf-8").strip()
             original_pmid = identifier[1].decode("utf-8").strip()
@@ -120,7 +124,9 @@ def run_bot():
                 )
 
                 # Only bother trying to make an edit if we changed anything
-                if page_text != wp_page.text and bot_can_run:
+                if page_text != wp_page.text:
+                    if not switch.enabled(fresh=True):
+                        break
                     wp_page.text = page_text
                     wp_page.save(bot_settings["summary_map"][language], minor=False)
 
