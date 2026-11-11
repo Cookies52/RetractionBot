@@ -3,6 +3,7 @@ import logging
 import os
 import pywikibot
 from pywikibot import pagegenerators
+from pywikibot.exceptions import APIError, EditConflictError, PageRelatedError, ServerError
 import pywikibot.login
 import yaml
 
@@ -100,48 +101,64 @@ def run_bot():
                 continue
 
             time.sleep(5)
-            page_list = []
-            try:
-                page_list = pagegenerators.SearchPageGenerator(
-                    search_string, namespaces=[0], site=site
-                )
-            except Exception as e:
-                logger.error(e)
-                time.sleep(60 * 5)
-                continue
-
-            for wp_page in page_list:
-                page_text = ""
-                try:
-                    page_text = wp_page.text
-                except Exception as e:
-                    logger.error(e)
-                    continue
-
-                page_text, changes = process_page(
-                    page_text, database.retrieve_retracted_identifier, template_map,
+            def transform(text):
+                return process_page(
+                    text, database.retrieve_retracted_identifier, template_map,
                     field_map, citation_templates.get(language, ()),
                 )
 
-                # Only bother trying to make an edit if we changed anything
-                if page_text != wp_page.text:
-                    if not switch.enabled(fresh=True):
-                        break
-                    wp_page.text = page_text
-                    wp_page.save(bot_settings["summary_map"][language], minor=False)
-
-                    logger.info(
-                        "Successfully edited {page_name} with "
-                        "retracted source(s).".format(page_name=wp_page.title())
+            def record_changes(page, changes):
+                for change in changes:
+                    database.log_retraction_edit(
+                        datetime.datetime.now(), language + ".wikipedia.org",
+                        page, change.record.original_doi, 0,
                     )
-                    for change in changes:
-                        database.log_retraction_edit(
-                            datetime.datetime.now(),
-                            language + ".wikipedia.org",
-                            wp_page,
-                            change.record.original_doi,
-                            0,
-                        )
+
+            scan_identifier(site, search_string, switch, bot_settings["summary_map"][language],
+                            transform, record_changes)
+
+
+def scan_identifier(site, search, switch, summary, transform, record_changes):
+    complete = True
+    try:
+        for page in pagegenerators.SearchPageGenerator(search, namespaces=[0], site=site):
+            if not switch.enabled():
+                return False
+            if not edit_page(page, switch, summary, transform, record_changes):
+                complete = False
+    except (APIError, ServerError) as error:
+        logger.warning("Search %r failed on %s: %s", search, site, error)
+        time.sleep(60)
+        return False
+    return complete
+
+
+def edit_page(page, switch, summary, transform, record_changes):
+    for attempt in range(2):
+        try:
+            original = page.get(force=True) if attempt else page.text
+            text, changes = transform(original)
+            if text == original:
+                return True
+            if not switch.enabled(fresh=True):
+                return False
+            page.text = text
+            page.save(summary=summary, minor=False, nocreate=True)
+        except EditConflictError as error:
+            if attempt:
+                logger.warning("Edit conflict persisted on %s: %s", page.title(), error)
+                return False
+            continue
+        except PageRelatedError as error:
+            logger.info("Skipping %s: %s", page.title(), error)
+            return True
+        except (APIError, ServerError) as error:
+            logger.warning("Could not read or save %s: %s", page.title(), error)
+            return False
+
+        logger.info("Successfully edited %s", page.title())
+        record_changes(page, changes)
+        return True
 
 
 
