@@ -15,6 +15,7 @@ import mwparserfromhell
 import time
 
 from .db import Database
+from .identifiers import is_doi, is_pmid
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -62,6 +63,16 @@ def load_bot_settings():
     return loaded_yaml
 
 
+def lookup_named_identifiers(item, doi_field, pmid_field, database):
+    doi = item.get(doi_field).value.strip() if item.has(doi_field) else ""
+    pmid = item.get(pmid_field).value.strip() if item.has(pmid_field) else ""
+    if is_doi(doi):
+        return database.retrieve_retracted_identifier(doi)
+    if is_pmid(pmid):
+        return database.retrieve_retracted_identifier(pmid)
+    return []
+
+
 def run_bot():
     bot_settings = load_bot_settings()
     bot_languages = bot_settings["template_name_map"]
@@ -80,13 +91,12 @@ def run_bot():
 
         for identifier in retracted_identifiers:
             search_string = ""
-            time.sleep(5)  # 10s sleep between API calls.
             original_id = identifier[0].decode("utf-8").strip()
             original_pmid = identifier[1].decode("utf-8").strip()
 
             logger.info("Starting processing %s - %s", original_id, original_pmid)
-            doi_valid = bool(re.match(DOI_REGEX, original_id))
-            pmid_valid = original_pmid != "0" and original_pmid != 0
+            doi_valid = is_doi(original_id)
+            pmid_valid = is_pmid(original_pmid)
 
             if doi_valid and pmid_valid:
                 search_string = '"' + original_id + '" OR "' + original_pmid + '"'
@@ -97,6 +107,7 @@ def run_bot():
             else:
                 continue
 
+            time.sleep(5)
             page_list = []
             try:
                 page_list = pagegenerators.SearchPageGenerator(
@@ -154,10 +165,11 @@ def run_bot():
                         # Process new retractions
                         if item.name.lower() in [doi_field.lower(), "doi-inline"]:
                             logger.debug("Processing doi templates")
+                            record = []
                             if item.has("1", ignore_empty=True):
-                                record = database.retrieve_retracted_identifier(
-                                    item.get("1").value.strip()
-                                )
+                                identifier = item.get("1").value.strip()
+                                if is_doi(identifier):
+                                    record = database.retrieve_retracted_identifier(identifier)
                             # get list of retractions in record
                             xitems = [x.retraction_nature for x in record]
                             for r in record:
@@ -189,10 +201,11 @@ def run_bot():
 
                         if item.name.lower() == pmid_field.lower():
                             logger.debug("Processing pmid templates")
+                            record = []
                             if item.has("1", ignore_empty=True):
-                                record = database.retrieve_retracted_identifier(
-                                    item.get("1").value.strip()
-                                )
+                                identifier = item.get("1").value.strip()
+                                if is_pmid(identifier):
+                                    record = database.retrieve_retracted_identifier(identifier)
                             for r in record:
                                 new_code = process_item(r, template_map, field_map)
                                 if new_code is not None:
@@ -203,19 +216,7 @@ def run_bot():
 
                         if item.name.strip() in citation_templates.get(language, []):
                             logger.debug("Processing cite templates")
-                            record = []
-                            if item.has(doi_field, ignore_empty=True):
-                                doi_value = item.get(doi_field).value.strip()
-                                logger.debug("DOI %s found", doi_value)
-                                record = database.retrieve_retracted_identifier(
-                                    doi_value
-                                )
-                            elif item.has(pmid_field, ignore_empty=True):
-                                pmid_value = item.get(pmid_field).value.strip()
-                                logger.debug("PMID %s found", pmid_value)
-                                record = database.retrieve_retracted_identifier(
-                                    pmid_value
-                                )
+                            record = lookup_named_identifiers(item, doi_field, pmid_field, database)
 
                             for r in record:
                                 new_code = process_item(r, template_map, field_map)
@@ -229,16 +230,7 @@ def run_bot():
                                     )
                     else:
                         # Check existing retraction
-                        if item.has(doi_field, ignore_empty=True):
-                            record = database.retrieve_retracted_identifier(
-                                item.get(doi_field).value.strip()
-                            )
-                        elif item.has(pmid_field, ignore_empty=True):
-                            record = database.retrieve_retracted_identifier(
-                                item.get(pmid_field).value.strip()
-                            )
-                        else:
-                            continue
+                        record = lookup_named_identifiers(item, doi_field, pmid_field, database)
                         in_use = None
 
                         logger.debug("Existing retracted item: %s", record)
