@@ -57,14 +57,21 @@ def select_notice(records):
 
 def process_item(record, template_map, field_map):
     keys = {
-        "Retraction": ("retracted", "Retracted"),
-        "Expression of concern": ("expression of concern", "Expression of Concern"),
+        "Retraction": ("retraction", "Retracted"),
+        "Expression of concern": ("eoc", "Expression of Concern"),
         "Correction": ("erratum", "Erratum"),
     }
     if record.retraction_nature not in keys:
         return None
     key, default = keys[record.retraction_nature]
-    tag = Template(template_map.get(key, default))
+    legacy_keys = {"retraction": ("retracted", "Retracted"), "eoc": ("expression of concern",)}
+    localized_name = template_map.get(key)
+    if not localized_name:
+        localized_name = next(
+            (template_map[old] for old in legacy_keys.get(key, ()) if template_map.get(old)),
+            default,
+        )
+    tag = Template(localized_name)
     doi = record.retraction_doi.strip()
     pmid = record.retraction_pubmed.strip()
     if is_doi(doi):
