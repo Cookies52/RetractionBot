@@ -1,34 +1,19 @@
 import datetime
 import logging
-import os
+import time
+
 import pywikibot
+from pymysql import MySQLError
 from pywikibot import pagegenerators
 from pywikibot.exceptions import APIError, EditConflictError, PageRelatedError, ServerError
-import pywikibot.login
-from pymysql import MySQLError
-import yaml
-
-try:
-    from yaml import CLoader as Loader
-except ImportError:
-    from yaml import Loader
-import time
 
 from .db import Database
 from .page_edits import process_page
 from .scan_queue import build_snapshot, open_scan_queue
+from .settings import configure_logging, load_bot_settings
 
-directory = os.path.dirname(os.path.realpath(__file__))
-
-logging.basicConfig(
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    filename=os.path.join(directory, "retractionbot.log"),
-    level=logging.INFO,
-)
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
 
 
 class WikiSwitch:
@@ -54,13 +39,6 @@ class WikiSwitch:
         if not self.allowed:
             logger.warning("Stopping on %s because %s does not authorize edits", self.site, page.title())
         return self.allowed
-
-
-def load_bot_settings():
-    """Returns the contents of bot_settings.yaml"""
-    with open("bot_settings.yml") as bot_settings_file:
-        loaded_yaml = yaml.load(bot_settings_file, Loader=Loader)
-    return loaded_yaml
 
 
 def run_bot():
@@ -180,5 +158,6 @@ def edit_page(page, switch, summary, transform, record_changes):
 
 
 if __name__ == "__main__":
+    configure_logging("retractionbot.log")
     logger.info("Starting bot run at {dt}".format(dt=datetime.datetime.now()))
     run_bot()

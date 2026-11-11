@@ -142,27 +142,6 @@ class Database:
                 if self._db.open:
                     cur.execute(f"DO RELEASE_LOCK({lock_name})")
 
-    def get_latest_timestamp(self):
-        """
-        Get the latest timestamp from the database in the format YYYY-MM-DD
-        """
-        cur = self._db.cursor()
-        query = """
-            SELECT timestamp FROM retractions
-            ORDER BY timestamp DESC
-            LIMIT 1
-        """
-        self._db.ping(reconnect=True)
-        cur.execute(query)
-        fetch_one = cur.fetchone()
-        if fetch_one:
-            max_timestamp = fetch_one[0].strftime("%Y-%m-%d")
-        else:
-            # If no objects are in the database, pick an arbitrarily old date.
-            max_timestamp = "1970-01-01"
-
-        return max_timestamp
-
     def load_scan_rows(self):
         self._db.ping(reconnect=True)
         with self._db.cursor() as cur:
@@ -233,12 +212,3 @@ class Database:
             ),
         )
         self._db.commit()
-
-    def check_edits(self, page_title, id):
-        cur = self._db.cursor()
-        query = """
-            SELECT * FROM edit_log WHERE page_title=%s AND (original_doi=%s OR original_pmid=%s)
-        """
-        self._db.ping(reconnect=True)
-        cur.execute(query, (page_title, id, id))
-        return list(cur.fetchall())
