@@ -137,15 +137,6 @@ def test_pmid_uses_its_own_indexed_column(database, connection):
     assert params == ("12345",)
 
 
-def test_each_paper_is_listed_once(database, connection):
-    connection.result = [(b"10.1/a", b"0")]
-
-    assert database.load_retracted_identifiers() == [(b"10.1/a", b"0")]
-
-    [(_, sql, _)] = connection.log
-    assert "GROUP BY original_doi, original_pmid" in sql
-
-
 # --- edit log ------------------------------------------------------------------
 
 

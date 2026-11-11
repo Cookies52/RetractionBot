@@ -15,8 +15,8 @@ except ImportError:
 import time
 
 from .db import Database
-from .identifiers import is_doi, is_pmid
 from .page_edits import process_page
+from .scan_queue import build_snapshot, open_scan_queue
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -64,55 +64,55 @@ def load_bot_settings():
 
 
 def run_bot():
-    bot_settings = load_bot_settings()
-    bot_languages = bot_settings["template_name_map"]
-    template_field_names = bot_settings["template_field_names"]
-    citation_templates = bot_settings["citation_templates"]
-    database = Database(bot_settings["db"])
-    retracted_identifiers = database.load_retracted_identifiers()
+    settings = load_bot_settings()
+    scan = settings.get("scan", {})
+    limit = scan.get("limit_per_wiki", 500)
+    if type(limit) is not int or limit < 1:
+        raise ValueError("scan.limit_per_wiki must be a positive integer")
+    state_file = scan.get("state_file", "~/.local/state/retractionbot/scan.sqlite3")
+    with open_scan_queue(state_file) as queue:
+        if queue is None:
+            logger.info("Another RetractionBot scan already owns %s", state_file)
+            return
+        run_scan(settings, queue, limit)
 
-    for language, template_map in bot_languages.items():
 
-        field_map = template_field_names[language]
-
+def run_scan(settings, queue, limit):
+    database = Database(settings["db"])
+    snapshot = None
+    for language, template_map in settings["template_name_map"].items():
         site = pywikibot.Site(language, "wikipedia")
         switch = WikiSwitch(site)
         if not switch.enabled():
             continue
         site.login()
+        if snapshot is None:
+            snapshot = build_snapshot(database.load_scan_rows())
 
-        for identifier in retracted_identifiers:
+        field_map = settings["template_field_names"][language]
+        citation_names = settings["citation_templates"].get(language, ())
+        summary = settings["summary_map"][language]
+        queue.sync(language, snapshot)
+
+        def transform(text):
+            return process_page(
+                text, database.retrieve_retracted_identifier, template_map, field_map,
+                citation_names,
+            )
+
+        def record_changes(page, changes):
+            log_page_changes(database, language, page, changes)
+
+        for doi, pmid in queue.work(language, limit):
             if not switch.enabled():
                 break
-            search_string = ""
-            original_id = identifier[0].decode("utf-8").strip()
-            original_pmid = identifier[1].decode("utf-8").strip()
-
-            logger.info("Starting processing %s - %s", original_id, original_pmid)
-            doi_valid = is_doi(original_id)
-            pmid_valid = is_pmid(original_pmid)
-
-            if doi_valid and pmid_valid:
-                search_string = '"' + original_id + '" OR "' + original_pmid + '"'
-            elif doi_valid:
-                search_string = '"' + original_id + '"'
-            elif pmid_valid:
-                search_string = '"' + original_pmid + '"'
-            else:
+            search = " OR ".join(f'"{identifier}"' for identifier in (doi, pmid) if identifier)
+            if not search:
                 continue
-
+            queue.started(language, doi, pmid)
             time.sleep(5)
-            def transform(text):
-                return process_page(
-                    text, database.retrieve_retracted_identifier, template_map,
-                    field_map, citation_templates.get(language, ()),
-                )
-
-            def record_changes(page, changes):
-                log_page_changes(database, language, page, changes)
-
-            scan_identifier(site, search_string, switch, bot_settings["summary_map"][language],
-                            transform, record_changes)
+            if scan_identifier(site, search, switch, summary, transform, record_changes):
+                queue.finished(language, doi, pmid)
 
 
 def log_page_changes(database, language, page, changes):

@@ -163,22 +163,15 @@ class Database:
 
         return max_timestamp
 
-    def load_retracted_identifiers(self):
-        """
-        Returns one (original_doi, original_pmid) pair per paper, shuffled.
-
-        A paper with several records (say a correction and a retraction) is
-        listed once, so it is searched for once.
-        """
-        cur = self._db.cursor()
-        query = """
-            SELECT original_doi, original_pmid FROM retractions
-            GROUP BY original_doi, original_pmid
-            ORDER BY RAND()
-        """
+    def load_scan_rows(self):
         self._db.ping(reconnect=True)
-        cur.execute(query)
-        return list(cur.fetchall())
+        with self._db.cursor() as cur:
+            cur.execute("""
+                SELECT original_doi, original_pmid, retraction_doi, retraction_pmid,
+                       retraction_nature, url, notice_date
+                FROM retractions
+            """)
+            return cur.fetchall()
 
     def retrieve_retracted_identifier(self, identifier):
         identifier = identifier.strip()
