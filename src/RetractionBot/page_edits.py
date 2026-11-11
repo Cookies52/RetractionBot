@@ -121,14 +121,7 @@ def process_page(text, lookup, template_map, field_map, citation_templates):
     containers.extend(
         tag.contents for tag in wikicode.ifilter_tags() if tag.contents is not None
     )
-    if not any(
-        str(tag.tag).strip().lower() == "ref" and re.search(r"\b10\.[0-9]{4,}/[A-Za-z0-9]", str(tag))
-        for tag in wikicode.ifilter_tags()
-    ):
-        return text, []
-
     changes = []
-    added_dois = set()
     records_by_id = {}
 
     for container in containers:
@@ -169,14 +162,11 @@ def process_page(text, lookup, template_map, field_map, citation_templates):
             existing = original_nodes[next_index] if next_index < len(original_nodes) else None
             generated = process_item(record, template_map, field_map)
             if isinstance(existing, Template) and normalize_template_name(existing.name) in tag_names:
-                if normalize_template_name(citation.name) not in citation_names:
-                    continue
                 before = str(existing)
                 update_notice(existing, generated, doi_field, pmid_field)
                 if before != str(existing):
                     changes.append(PageChange(record, "update"))
-            elif record.original_doi not in added_dois:
-                added_dois.add(record.original_doi)
+            else:
                 container.insert(index + 1, generated)
                 changes.append(PageChange(record, "add"))
 
