@@ -93,6 +93,7 @@ def make_row(**overrides):
         "retraction_pmid": "0",
         "retraction_nature": "Retraction",
         "url": "",
+        "notice_date": None,
     }
     values.update(overrides)
     return tuple(values[column] for column in db.RETRACTION_COLUMNS)
@@ -247,7 +248,7 @@ def test_failed_swap_leaves_the_live_table_alone(database, connection):
     "row, error",
     [
         (make_row(original_doi="x" * 201), "original_doi"),
-        (make_row()[:-1], "expected 8"),
+        (make_row()[:-1], "expected 9"),
     ],
 )
 def test_bad_rows_are_rejected_before_staging(database, connection, row, error):

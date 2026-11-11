@@ -27,6 +27,7 @@ RETRACTION_WATCH_URL = "https://gitlab.com/crossref/retraction-watch-data/-/raw/
 REQUIRED_COLUMNS = (
     "Record ID",
     "OriginalPaperDate",
+    "RetractionDate",
     "OriginalPaperDOI",
     "OriginalPaperPubMedID",
     "RetractionDOI",
@@ -51,16 +52,19 @@ def fit_urls(urls, limit):
     return ";".join(parts)
 
 
-def parse_timestamp(value):
-    """Parses OriginalPaperDate; an unreadable date is not a reason to drop the row."""
+def parse_csv_date(value):
     for date_format in ("%m/%d/%Y %H:%M", "%m/%d/%Y"):
         try:
-            return clamp_timestamp(
-                datetime.datetime.strptime(value.strip(), date_format)
-            )
+            return datetime.datetime.strptime(value.strip(), date_format)
         except ValueError:
             continue
-    return PLACEHOLDER_TIMESTAMP
+    return None
+
+
+def parse_timestamp(value):
+    """An unreadable publication date is not a reason to drop the row."""
+    timestamp = parse_csv_date(value)
+    return clamp_timestamp(timestamp) if timestamp is not None else PLACEHOLDER_TIMESTAMP
 
 
 def row_from_record(record):
@@ -82,6 +86,7 @@ def row_from_record(record):
     notice_pmid = retraction_pmid if is_pmid(retraction_pmid) else ""
     urls = record["URLS"] if notice_doi or notice_pmid else ""
 
+    notice_date = parse_csv_date(record["RetractionDate"])
     return (
         parse_timestamp(record["OriginalPaperDate"]),
         "Crossref",
@@ -91,6 +96,7 @@ def row_from_record(record):
         notice_pmid,
         nature,
         fit_urls(urls, COLUMN_LIMITS["url"]),
+        notice_date.date() if notice_date else None,
     )
 
 

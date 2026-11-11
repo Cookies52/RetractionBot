@@ -5,10 +5,10 @@ import pytest
 from src.RetractionBot.page_edits import process_page
 
 
-def notice(doi="10.1234/a", pmid="123", nature="Retraction", notice_doi="10.1234/notice"):
+def notice(doi="10.1234/a", pmid="123", nature="Retraction", notice_doi="10.1234/notice", notice_date=None):
     return SimpleNamespace(
         original_doi=doi, original_pubmed=pmid, retraction_nature=nature,
-        retraction_doi=notice_doi, retraction_pubmed="", url="",
+        retraction_doi=notice_doi, retraction_pubmed="", url="", notice_date=notice_date,
     )
 
 

@@ -1,6 +1,7 @@
 """Find citations and change their adjacent notice tags without touching other nodes."""
 
 from dataclasses import dataclass
+from datetime import date
 import re
 
 import mwparserfromhell
@@ -45,12 +46,24 @@ NOTICE_PRIORITY = {"Retraction": 3, "Expression of concern": 2, "Correction": 1}
 
 
 def select_notice(records):
-    # Until notice dates are available, leave mixed reinstatement histories alone.
-    if any(record.retraction_nature == "Reinstatement" for record in records):
-        return None
+    active = [r for r in records if r.retraction_nature in NOTICE_PRIORITY]
+    reinstatements = [r for r in records if r.retraction_nature == "Reinstatement"]
+    if reinstatements:
+        if active and any(r.notice_date is None for r in active + reinstatements):
+            return None
+        reinstatement = max(reinstatements, key=lambda r: r.notice_date or date.min)
+        if any(r.notice_date == reinstatement.notice_date for r in active):
+            return None
+        active = [r for r in active if r.notice_date > reinstatement.notice_date]
+        if not active:
+            return reinstatement
+
     return max(
-        (record for record in records if record.retraction_nature in NOTICE_PRIORITY),
-        key=lambda record: NOTICE_PRIORITY[record.retraction_nature],
+        active,
+        key=lambda r: (
+            NOTICE_PRIORITY[r.retraction_nature], r.notice_date or date.min,
+            r.retraction_doi, r.retraction_pubmed, r.url,
+        ),
         default=None,
     )
 
@@ -167,8 +180,15 @@ def process_page(text, lookup, template_map, field_map, citation_templates):
                     continue
                 break
             existing = original_nodes[next_index] if next_index < len(original_nodes) else None
+            has_tag = isinstance(existing, Template) and normalize_template_name(existing.name) in tag_names
+            if record.retraction_nature == "Reinstatement":
+                if has_tag:
+                    del container.nodes[next_index]
+                    changes.append(PageChange(record, "remove"))
+                continue
+
             generated = process_item(record, template_map, field_map)
-            if isinstance(existing, Template) and normalize_template_name(existing.name) in tag_names:
+            if has_tag:
                 before = str(existing)
                 update_notice(existing, generated, doi_field, pmid_field)
                 if before != str(existing):

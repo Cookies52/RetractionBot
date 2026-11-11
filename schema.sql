@@ -7,6 +7,7 @@ CREATE TABLE `retractions` (
   `retraction_pmid` varbinary(200) NOT NULL,
   `retraction_nature` varbinary(200) NOT NULL,
   `url` varbinary(5000) NOT NULL,
+  `notice_date` DATE NULL,
   KEY `original_doi` (`original_doi`),
   KEY `original_pmid` (`original_pmid`)
 ) ENGINE=Aria;

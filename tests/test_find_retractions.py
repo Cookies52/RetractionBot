@@ -17,6 +17,7 @@ COLUMNS = find_retractions.REQUIRED_COLUMNS + ("Title",)
 DEFAULTS = {
     "Record ID": "1",
     "OriginalPaperDate": "1/2/2020 0:00",
+    "RetractionDate": "2/3/2021 0:00",
     "OriginalPaperDOI": "10.1234/abc",
     "OriginalPaperPubMedID": "0",
     "RetractionDOI": "10.1234/abc.r",
@@ -82,6 +83,7 @@ def test_row_layout_matches_the_table():
         "",
         "Retraction",
         "https://example.org/a",
+        datetime.date(2021, 2, 3),
     )
 
 
@@ -144,7 +146,7 @@ def test_missing_notice_identifiers_keep_the_paper_status(nature):
         "RetractionNature": nature, "RetractionDOI": "unavailable",
         "RetractionPubMedID": "0",
     }))
-    assert row[2:] == ("10.1234/abc", "", "", "", nature, "")
+    assert row[2:8] == ("10.1234/abc", "", "", "", nature, "")
 
 
 @pytest.mark.parametrize(

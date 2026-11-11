@@ -1,0 +1,1 @@
+ALTER TABLE retractions ADD COLUMN IF NOT EXISTS notice_date DATE NULL;

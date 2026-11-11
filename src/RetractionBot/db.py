@@ -21,7 +21,7 @@ COLUMN_LIMITS = {
 }
 
 # Order of the values in the rows given to Database.replace_retractions().
-RETRACTION_COLUMNS = ("timestamp",) + tuple(COLUMN_LIMITS)
+RETRACTION_COLUMNS = ("timestamp",) + tuple(COLUMN_LIMITS) + ("notice_date",)
 
 # The TIMESTAMP type only holds 1970-01-01 00:00:01 UTC to 2038-01-19. Dates
 # outside 1971-2037 are stored as this value instead (a day in, so that no
@@ -55,7 +55,7 @@ def check_lengths(rows):
                 "row %d has %d values, expected %d"
                 % (number, len(row), len(RETRACTION_COLUMNS))
             )
-        for column, value in zip(RETRACTION_COLUMNS[1:], row[1:]):
+        for column, value in zip(COLUMN_LIMITS, row[1:-1]):
             size = len(str(value).encode("utf-8"))
             if size > COLUMN_LIMITS[column]:
                 raise ValueError(
@@ -74,6 +74,7 @@ class Retraction:
         retraction_pmid,
         retraction_nature,
         url,
+        notice_date=None,
     ):
         self.origin = origin.decode("utf-8")
         self.original_doi = original_doi.decode("utf-8")
@@ -82,6 +83,7 @@ class Retraction:
         self.retraction_pubmed = retraction_pmid.decode("utf-8")
         self.retraction_nature = retraction_nature.decode("utf-8")
         self.url = url.decode("utf-8")
+        self.notice_date = notice_date
 
 
 class Database:
@@ -193,7 +195,7 @@ class Database:
             cur.execute(
                 f"""
                 SELECT origin, original_doi, retraction_doi, original_pmid,
-                       retraction_pmid, retraction_nature, url
+                       retraction_pmid, retraction_nature, url, notice_date
                 FROM retractions WHERE {column}=%s
                 """,
                 (identifier,),
