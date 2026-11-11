@@ -212,6 +212,7 @@ class Database:
         *,
         notice_doi="0",
         notice_pmid="0",
+        action="unknown",
     ):
         """Records that ``page_title`` was flagged because of this paper."""
         cur = self._db.cursor()
@@ -221,8 +222,8 @@ class Database:
         query = """
             INSERT INTO edit_log
                 (timestamp, domain, page_title, original_doi, retraction_doi,
-                 original_pmid, retraction_pmid)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                 original_pmid, retraction_pmid, action)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         self._db.ping(reconnect=True)
         cur.execute(
@@ -235,6 +236,7 @@ class Database:
                 notice_doi,
                 original_pmid,
                 notice_pmid,
+                action,
             ),
         )
         self._db.commit()

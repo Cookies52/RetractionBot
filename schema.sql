@@ -19,7 +19,8 @@ CREATE TABLE `edit_log` (
   `original_doi` varbinary(200) NOT NULL,
   `retraction_doi` varbinary(200) NOT NULL,
   `original_pmid` varbinary(200) NOT NULL,
-  `retraction_pmid` varbinary(200) NOT NULL
+  `retraction_pmid` varbinary(200) NOT NULL,
+  `action` VARCHAR(10) NOT NULL DEFAULT 'unknown'
 ) ENGINE=Aria;
 
 -- Existing installations: the lookups in db.py filter on these two columns and

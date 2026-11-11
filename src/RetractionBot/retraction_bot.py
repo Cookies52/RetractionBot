@@ -5,6 +5,7 @@ import pywikibot
 from pywikibot import pagegenerators
 from pywikibot.exceptions import APIError, EditConflictError, PageRelatedError, ServerError
 import pywikibot.login
+from pymysql import MySQLError
 import yaml
 
 try:
@@ -108,14 +109,30 @@ def run_bot():
                 )
 
             def record_changes(page, changes):
-                for change in changes:
-                    database.log_retraction_edit(
-                        datetime.datetime.now(), language + ".wikipedia.org",
-                        page, change.record.original_doi, 0,
-                    )
+                log_page_changes(database, language, page, changes)
 
             scan_identifier(site, search_string, switch, bot_settings["summary_map"][language],
                             transform, record_changes)
+
+
+def log_page_changes(database, language, page, changes):
+    title = page.title()
+    timestamp = datetime.datetime.now()
+    for change in changes:
+        record = change.record
+        try:
+            database.log_retraction_edit(
+                timestamp, language + ".wikipedia.org", title,
+                record.original_doi, record.original_pubmed,
+                notice_doi=record.retraction_doi,
+                notice_pmid=record.retraction_pubmed,
+                action=change.action,
+            )
+        except MySQLError:
+            logger.exception(
+                "Wiki edit saved, but could not record %s for %s (%s / %s)",
+                change.action, title, record.original_doi, record.original_pubmed,
+            )
 
 
 def scan_identifier(site, search, switch, summary, transform, record_changes):

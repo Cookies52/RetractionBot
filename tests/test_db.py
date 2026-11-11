@@ -158,13 +158,14 @@ def test_edit_log_insert_names_its_columns(database, connection):
         "12345",
         notice_doi="10.1234/notice",
         notice_pmid="67890",
+        action="update",
     )
 
     [(_, sql, params), (commit,)] = connection.log
     assert commit == "commit"
     assert (
         "(timestamp, domain, page_title, original_doi, retraction_doi, "
-        "original_pmid, retraction_pmid)"
+        "original_pmid, retraction_pmid, action)"
     ) in sql
     # The PMID used to land in the retraction_doi column.
     assert params == (
@@ -175,6 +176,7 @@ def test_edit_log_insert_names_its_columns(database, connection):
         "10.1234/notice",
         "12345",
         "67890",
+        "update",
     )
 
 
