@@ -377,6 +377,11 @@ def update_template_in_place(existing, new, doi_field, pmid_field):
     the bot manages are added, changed or removed, and only when their value
     really differs, so field order, spacing and editor-added fields are kept.
     """
+    # Read the new tag back from its text, the way the wiki will read it. A
+    # link with "=" in it is then a named field, as it is in the existing tag,
+    # instead of a numbered one that the existing tag never seems to have.
+    new = mwparserfromhell.parse(str(new)).filter_templates(recursive=False)[0]
+
     if normalize_template_name(existing.name) != normalize_template_name(new.name):
         old_name = str(existing.name)
         leading = old_name[: len(old_name) - len(old_name.lstrip())]

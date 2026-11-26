@@ -441,6 +441,35 @@ KOREN_DATA = [
     )
 ]
 
+# The same with "=" in the first link. Francesca Gino, before
+# Special:Diff/1358978642. There the citation is a list item, not a <ref>;
+# it is wrapped in one here because the bot skips pages with no <ref> DOIs.
+GINO_URLS = [
+    "http://retractionwatch.com/?s=%22Dan+Ariely%22",
+    "http://retractionwatch.com/2021/09/14/"
+    "highly-criticized-paper-on-dishonesty-retracted/",
+]
+GINO_CITE = (
+    "{{cite journal |last1=Shu |last2=Mazar |last3=Gino | last4=Ariely "
+    "| last5=Bazerman |date=2012 |title=Signing at the beginning makes ethics "
+    "salient… |journal=[[Proceedings of the National Academy of Sciences]]"
+    "|volume=109 |issue=38 |pages=15197–15300 |doi=10.1073/pnas.1209746109 "
+    "|doi-access=free |pmid=22927408 |pmc=3458378 |author4-link=Dan Ariely }}"
+)
+GINO_TAG = (
+    "{{Retracted|doi=10.1073/pnas.2115397118|pmid=34518237"
+    + "".join(f"|{url}{RW}" for url in GINO_URLS)
+    + "|intentional=yes}}"
+)
+GINO_DATA = [
+    record(
+        "Retraction",
+        ("10.1073/pnas.1209746109", "22927408"),
+        ("10.1073/pnas.2115397118", "34518237"),
+        GINO_URLS,
+    )
+]
+
 # Real changes.
 # Susan B. Anthony Pro-Life America, the bot's edit oldid 1380779004 added
 # two Retraction Watch links.
@@ -575,6 +604,7 @@ EDITOR_FIELDS_KEPT = [
 ]
 EQUALS_IN_LINK = [
     pytest.param(ref(KOREN_CITE, KOREN_TAG), KOREN_DATA, id="equals-in-link"),
+    pytest.param(ref(GINO_CITE, GINO_TAG), GINO_DATA, id="equals-in-first-link"),
 ]
 REAL_CHANGES = [
     pytest.param(ref(SBA_CITE, SBA_TAG), SBA_DATA, id="new-links"),
