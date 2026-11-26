@@ -30,6 +30,14 @@ logger.setLevel(logging.DEBUG)
 DOI_REGEX = r"\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?![\"&'<>])[a-zA-Z.\/0-9\-])+)\b"
 
 
+def template_key(name):
+    """One form of a template name, for comparing names on pages and in settings.
+
+    MediaWiki treats underscores as spaces, and editors write names in either case.
+    """
+    return str(name).strip().replace("_", " ").casefold()
+
+
 def check_bot_killswitches(site):
     """
     Verifies that bot killswitch hasn't been edited, for this site or Meta.
@@ -73,6 +81,10 @@ def run_bot():
     for language, template_map in bot_languages.items():
 
         field_map = template_field_names[language]
+        # Templates without "cite" in the name, such as frwiki's
+        listed_templates = {
+            template_key(x) for x in citation_templates.get(language, [])
+        }
 
         site = pywikibot.Site(language, "wikipedia")
         site.login()
@@ -201,7 +213,13 @@ def run_bot():
                                         str(item), str(item) + str(new_code)
                                     )
 
-                        if item.name.strip() in citation_templates.get(language, []):
+                        template_name = template_key(item.name)
+                        # "cite" starting a word: cite journal, citeweb, #invoke:cite,
+                        # but not chemspidercite or recite
+                        if (
+                            re.search(r"\bcite", template_name)
+                            or template_name in listed_templates
+                        ):
                             logger.debug("Processing cite templates")
                             record = []
                             if item.has(doi_field, ignore_empty=True):
