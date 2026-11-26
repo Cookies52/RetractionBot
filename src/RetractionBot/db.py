@@ -153,6 +153,8 @@ class Database:
         cur = self._db.cursor()
         query = """
             SELECT * FROM retractions WHERE original_doi=%s OR original_pmid=%s
+            ORDER BY CASE retraction_nature WHEN 'Retraction' THEN 0
+                WHEN 'Expression of concern' THEN 1 WHEN 'Correction' THEN 2 ELSE 3 END
         """
         self._db.ping(reconnect=True)
         cur.execute(query, (fold_doi(id), id))
