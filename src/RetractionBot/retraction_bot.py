@@ -214,7 +214,12 @@ def run_bot():
                                     )
 
                         template_name = template_key(item.name)
-                        if "cite" in template_name or template_name in listed_templates:
+                        # "cite" starting a word: cite journal, citeweb, #invoke:cite,
+                        # but not chemspidercite or recite
+                        if (
+                            re.search(r"\bcite", template_name)
+                            or template_name in listed_templates
+                        ):
                             logger.debug("Processing cite templates")
                             record = []
                             if item.has(doi_field, ignore_empty=True):
