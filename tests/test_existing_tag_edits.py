@@ -106,7 +106,9 @@ def prohibit_network(monkeypatch):
 @pytest.fixture
 def run_bot(monkeypatch):
     wiki = SimpleNamespace(login=lambda: None)
-    switch = SimpleNamespace(text="yes", title=lambda: "run")
+    switch = SimpleNamespace(
+        text="yes", get=lambda **kwargs: "yes", title=lambda: "run"
+    )
     monkeypatch.setattr(bot, "load_bot_settings", lambda: copy.deepcopy(SETTINGS))
     monkeypatch.setattr(bot.pywikibot, "Site", lambda *args: wiki)
     monkeypatch.setattr(bot.pywikibot, "Page", lambda *args: switch)
